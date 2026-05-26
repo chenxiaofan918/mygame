@@ -1,0 +1,20 @@
+# 登录协议
+.login_request {
+	account 0 : string
+	password 1 : string
+}
+
+.login_response {
+	ok 0 : boolean
+	player_id 1 : integer
+	token 2 : string
+}
+
+.register_request {
+	account 0 : string
+	password 1 : string
+}
+
+.register_response {
+	ok 0 : boolean
+}

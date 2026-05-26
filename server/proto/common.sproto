@@ -1,0 +1,15 @@
+# 通用协议定义
+.Package {
+	type 0 : integer
+	session 1 : integer
+}
+
+# 错误响应
+.error_response {
+	code 0 : integer
+	message 1 : string
+}
+
+# 心跳
+.heartbeat_request {}
+.heartbeat_response {}

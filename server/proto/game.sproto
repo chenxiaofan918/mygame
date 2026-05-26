@@ -1,0 +1,29 @@
+# 游戏协议
+.enter_scene_request {
+	scene_id 0 : integer
+}
+
+.enter_scene_response {
+	ok 0 : boolean
+	players 1 : *integer
+}
+
+.move_request {
+	x 0 : integer
+	y 1 : integer
+}
+
+.move_notify {
+	player_id 0 : integer
+	x 1 : integer
+	y 2 : integer
+}
+
+.chat_request {
+	msg 0 : string
+}
+
+.chat_notify {
+	player_id 0 : integer
+	msg 1 : string
+}

@@ -1,0 +1,9 @@
+include "config.path"
+
+-- 测试客户端配置（独立进程启动，连接已运行的游戏服）
+thread = 2
+logger = nil
+logpath = "./log"
+harbor = 0
+start = "test_sproto"
+bootstrap = "snlua bootstrap"
