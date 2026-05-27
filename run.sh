@@ -168,10 +168,10 @@ setup_redis() {
 build_skynet() {
 	log_info "编译 skynet..."
 
-	if [ ! -d "$SKYNET_DIR" ]; then
-		log_error "skynet 源码不存在: $SKYNET_DIR"
-		log_error "请确保已执行: git submodule update --init --recursive"
-		exit 1
+	# 如果子模块未初始化，自动初始化
+	if [ ! -f "$SKYNET_DIR/Makefile" ]; then
+		log_info "初始化子模块 skynet..."
+		git submodule update --init --recursive
 	fi
 
 	cd "$SKYNET_DIR"
