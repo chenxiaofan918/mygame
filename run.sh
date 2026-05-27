@@ -221,7 +221,19 @@ update_skynet() {
 		exit 1
 	fi
 
+	# 复制核心二进制
 	cp skynet "$SKYNET_BIN"
+
+	# 复制运行时依赖（Lua 脚本 + .so 库）
+	log_info "复制运行时文件..."
+	local lib_dir="$PROJECT_DIR/server/lib"
+	mkdir -p "$lib_dir/cservice" "$lib_dir/luaclib" "$lib_dir/service" "$lib_dir/lualib"
+
+	cp -r lualib/*.lua "$lib_dir/lualib/" 2>/dev/null || true
+	cp -r service/*.lua "$lib_dir/service/" 2>/dev/null || true
+	cp -r luaclib/*.so "$lib_dir/luaclib/" 2>/dev/null || true
+	cp -r cservice/*.so "$lib_dir/cservice/" 2>/dev/null || true
+
 	echo "$commit" > "$SKYNET_VER_FILE"
 
 	cd "$PROJECT_DIR"
@@ -232,7 +244,9 @@ update_skynet() {
 	else
 		log_ok "skynet 已更新至 $version (commit: $commit)"
 	fi
-	log_ok "二进制路径: $SKYNET_BIN"
+	log_info "二进制: $SKYNET_BIN"
+	log_info "服务库: $lib_dir/cservice/"
+	log_info "Lua 库:  $lib_dir/lualib/"
 }
 
 # ============================================
