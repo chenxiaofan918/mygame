@@ -357,6 +357,11 @@ case "${1:-deploy}" in
 		;;
 	start)
 		check_config
+		# 如果 skynet 未编译则自动编译
+		if [ ! -f "$SKYNET_BIN" ]; then
+			log_info "skynet 二进制不存在，先执行编译..."
+			build_skynet
+		fi
 		start_server
 		;;
 	stop)
