@@ -7,12 +7,14 @@
 #   ./run.sh stop         停止服务
 #   ./run.sh restart      重启服务
 #   ./run.sh status       查看状态
+#   ./run.sh update-skynet [版本]  更新 skynet 二进制
 # ============================================
 
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKYNET_BIN="$PROJECT_DIR/server/bin/skynet"
+SKYNET_VER_FILE="$PROJECT_DIR/server/bin/skynet.version"
 CONFIG="$PROJECT_DIR/server/config/config.game"
 SCHEMA="$PROJECT_DIR/server/schema.sql"
 
@@ -162,21 +164,75 @@ setup_redis() {
 }
 
 # ============================================
-# 编译 skynet
+# 检查 skynet 二进制
 # ============================================
 build_skynet() {
 	log_info "检查 skynet 二进制..."
 
 	if [ -f "$SKYNET_BIN" ]; then
-		log_ok "skynet 二进制就绪: $SKYNET_BIN"
+		local ver
+		ver=$(cat "$SKYNET_VER_FILE" 2>/dev/null || echo "v1")
+		log_ok "skynet 二进制就绪 ($ver): $SKYNET_BIN"
 	else
 		log_error "skynet 二进制不存在: $SKYNET_BIN"
-		log_error "请从项目仓库重新克隆，或手动编译:"
-		log_error "  git clone https://github.com/cloudwu/skynet.git /tmp/skynet"
-		log_error "  cd /tmp/skynet && make linux"
-		log_error "  cp /tmp/skynet/skynet $SKYNET_BIN"
+		log_error "请执行以下命令编译最新版本:"
+		log_error "  ./run.sh update-skynet"
 		exit 1
 	fi
+}
+
+# ============================================
+# 更新 skynet 二进制
+# ============================================
+update_skynet() {
+	local version="${1:-latest}"
+	local tmp_dir
+	tmp_dir=$(mktemp -d)
+
+	log_info "克隆 skynet 源码..."
+	if ! git clone --depth 1 https://github.com/cloudwu/skynet.git "$tmp_dir/skynet" 2>/dev/null; then
+		log_error "克隆 skynet 失败，请检查网络连接"
+		rm -rf "$tmp_dir"
+		exit 1
+	fi
+
+	cd "$tmp_dir/skynet"
+
+	local commit
+	if [ "$version" = "latest" ]; then
+		commit=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+		log_info "编译最新版 skynet (commit: $commit)..."
+	else
+		if git checkout "$version" 2>/dev/null; then
+			commit="$version"
+			log_info "编译指定版本 skynet: $version..."
+		else
+			log_error "版本 $version 不存在，请检查标签名"
+			rm -rf "$tmp_dir"
+			exit 1
+		fi
+	fi
+
+	make linux MALLOC_STATICLIB= SKYNET_DEFINES=-DNOUSE_JEMALLOC -j$(nproc) 2>&1 | tail -3
+
+	if [ ! -f skynet ]; then
+		log_error "编译失败"
+		rm -rf "$tmp_dir"
+		exit 1
+	fi
+
+	cp skynet "$SKYNET_BIN"
+	echo "$commit" > "$SKYNET_VER_FILE"
+
+	cd "$PROJECT_DIR"
+	rm -rf "$tmp_dir"
+
+	if [ "$version" = "latest" ]; then
+		log_ok "skynet 已更新至最新版 (commit: $commit)"
+	else
+		log_ok "skynet 已更新至 $version (commit: $commit)"
+	fi
+	log_ok "二进制路径: $SKYNET_BIN"
 }
 
 # ============================================
@@ -304,7 +360,9 @@ show_status() {
 	fi
 
 	if [ -f "$SKYNET_BIN" ]; then
-		echo -e "  skynet:    ${GREEN}已就绪${NC}"
+		local ver
+		ver=$(cat "$SKYNET_VER_FILE" 2>/dev/null || echo "v1")
+		echo -e "  skynet:    ${GREEN}已就绪 (${ver})${NC}"
 	else
 		echo -e "  skynet:    ${RED}二进制缺失${NC}"
 	fi
@@ -368,15 +426,25 @@ case "${1:-deploy}" in
 	status)
 		show_status
 		;;
+	update-skynet)
+		shift
+		update_skynet "$@"
+		;;
 	*)
-		echo "用法: $0 {deploy|start|stop|restart|status}"
+		echo "用法: $0 {deploy|start|stop|restart|status|update-skynet}"
 		echo ""
-		echo "  deploy   一键部署 + 启动（首次使用）"
-		echo "  start    仅启动游戏服务器"
-		echo "  stop     停止游戏服务器"
-		echo "  restart  重启游戏服务器（自动清日志）"
-		echo "  clean    清理日志文件"
-		echo "  status   查看所有服务状态"
+		echo "  deploy        一键部署 + 启动（首次使用）"
+		echo "  start         仅启动游戏服务器"
+		echo "  stop          停止游戏服务器"
+		echo "  restart       重启游戏服务器（自动清日志）"
+		echo "  clean         清理日志文件"
+		echo "  status        查看所有服务状态"
+		echo "  update-skynet [版本]  编译最新版 skynet（可指定 tag）"
+		echo ""
+		echo "示例:"
+		echo "  ./run.sh deploy                   # 首次部署"
+		echo "  ./run.sh update-skynet            # 编译最新 skynet"
+		echo "  ./run.sh update-skynet v1.6.0     # 编译指定版本"
 		exit 1
 		;;
 esac
