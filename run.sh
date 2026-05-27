@@ -229,10 +229,10 @@ update_skynet() {
 	local lib_dir="$PROJECT_DIR/server/lib"
 	mkdir -p "$lib_dir/cservice" "$lib_dir/luaclib" "$lib_dir/service" "$lib_dir/lualib"
 
-	cp -r lualib/*.lua "$lib_dir/lualib/" 2>/dev/null || true
-	cp -r service/*.lua "$lib_dir/service/" 2>/dev/null || true
-	cp -r luaclib/*.so "$lib_dir/luaclib/" 2>/dev/null || true
-	cp -r cservice/*.so "$lib_dir/cservice/" 2>/dev/null || true
+	cp -r lualib/. "$lib_dir/lualib/" 2>/dev/null || true
+	cp -r service/. "$lib_dir/service/" 2>/dev/null || true
+	cp -r luaclib/. "$lib_dir/luaclib/" 2>/dev/null || true
+	cp -r cservice/. "$lib_dir/cservice/" 2>/dev/null || true
 
 	echo "$commit" > "$SKYNET_VER_FILE"
 
