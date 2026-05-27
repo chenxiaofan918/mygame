@@ -1,0 +1,11 @@
+# 自动处理换行符（文本文件存 LF，二进制文件不动）
+* text=auto
+
+# Shell 脚本必须始终使用 LF（Linux 要求）
+*.sh text eol=lf
+
+# 特定文件保持原样
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
