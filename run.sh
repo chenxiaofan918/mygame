@@ -12,8 +12,7 @@
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SKYNET_DIR="$PROJECT_DIR/3rd/skynet"
-SKYNET_BIN="$SKYNET_DIR/skynet"
+SKYNET_BIN="$PROJECT_DIR/server/bin/skynet"
 CONFIG="$PROJECT_DIR/server/config/config.game"
 SCHEMA="$PROJECT_DIR/server/schema.sql"
 
@@ -166,22 +165,16 @@ setup_redis() {
 # 编译 skynet
 # ============================================
 build_skynet() {
-	log_info "编译 skynet..."
-
-	# 如果子模块未初始化，自动初始化
-	if [ ! -f "$SKYNET_DIR/Makefile" ]; then
-		log_info "初始化子模块 skynet..."
-		git submodule update --init --recursive
-	fi
-
-	cd "$SKYNET_DIR"
-	make linux MALLOC_STATICLIB= SKYNET_DEFINES=-DNOUSE_JEMALLOC -j$(nproc) 2>&1 | tail -5
-	cd "$PROJECT_DIR"
+	log_info "检查 skynet 二进制..."
 
 	if [ -f "$SKYNET_BIN" ]; then
-		log_ok "skynet 编译完成: $SKYNET_BIN"
+		log_ok "skynet 二进制就绪: $SKYNET_BIN"
 	else
-		log_error "编译失败，请手动执行: cd 3rd/skynet && make linux"
+		log_error "skynet 二进制不存在: $SKYNET_BIN"
+		log_error "请从项目仓库重新克隆，或手动编译:"
+		log_error "  git clone https://github.com/cloudwu/skynet.git /tmp/skynet"
+		log_error "  cd /tmp/skynet && make linux"
+		log_error "  cp /tmp/skynet/skynet $SKYNET_BIN"
 		exit 1
 	fi
 }
@@ -311,9 +304,9 @@ show_status() {
 	fi
 
 	if [ -f "$SKYNET_BIN" ]; then
-		echo -e "  skynet:    ${GREEN}已编译${NC}"
+		echo -e "  skynet:    ${GREEN}已就绪${NC}"
 	else
-		echo -e "  skynet:    ${RED}未编译${NC}"
+		echo -e "  skynet:    ${RED}二进制缺失${NC}"
 	fi
 	echo ""
 }
@@ -357,11 +350,7 @@ case "${1:-deploy}" in
 		;;
 	start)
 		check_config
-		# 如果 skynet 未编译则自动编译
-		if [ ! -f "$SKYNET_BIN" ]; then
-			log_info "skynet 二进制不存在，先执行编译..."
-			build_skynet
-		fi
+		build_skynet
 		start_server
 		;;
 	stop)

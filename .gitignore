@@ -22,6 +22,9 @@ skynet.pid
 core.*
 dump.rdb
 
+# 第三方源码（已使用预编译二进制，不再跟踪）
+3rd/
+
 # Claude Code
 .claude/
 
