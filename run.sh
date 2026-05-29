@@ -116,10 +116,10 @@ setup_mysql() {
 	fi
 
 	log_info "创建数据库和表..."
-	eval "$mysql_login" < "$SCHEMA"
+	eval "$mysql_login" < "$SCHEMA" || true
 
 	local tables
-	tables=$(eval "$mysql_login" -e "USE game; SHOW TABLES;" 2>/dev/null)
+	tables=$(eval "$mysql_login" -e "USE game; SHOW TABLES;" 2>/dev/null || true)
 
 	if echo "$tables" | grep -q "account"; then
 		log_ok "数据库初始化完成（game.account / game.player）"
@@ -127,10 +127,10 @@ setup_mysql() {
 		log_warn "建表可能未成功，请手动检查: sudo mysql -u root < $SCHEMA"
 	fi
 
-	# 配置 root 密码（与 config.game 保持一致）
-	eval "$mysql_login" -e "ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '123456';" 2>/dev/null
-	eval "$mysql_login" -e "ALTER USER IF EXISTS 'root'@'127.0.0.1' IDENTIFIED WITH mysql_native_password BY '123456';" 2>/dev/null
-	eval "$mysql_login" -e "FLUSH PRIVILEGES;" 2>/dev/null
+	# 配置 root 密码（兼容 MySQL 和 MariaDB）
+	eval "$mysql_login" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '123456';" 2>/dev/null || true
+	eval "$mysql_login" -e "ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '123456';" 2>/dev/null || true
+	eval "$mysql_login" -e "FLUSH PRIVILEGES;" 2>/dev/null || true
 	# 验证密码登录
 	if mysql -u root -p'123456' -h 127.0.0.1 -e "SELECT 1;" &>/dev/null; then
 		log_ok "root 密码已配置"
