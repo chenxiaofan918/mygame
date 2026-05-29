@@ -99,6 +99,28 @@ function mysql_cmds.ping()
 	return ok and result or false
 end
 
+-- 事务
+function mysql_cmds.begin()
+	if not mysql_db then
+		return { badresult = true, err = "mysql not connected" }
+	end
+	return mysql_cmds.query("START TRANSACTION")
+end
+
+function mysql_cmds.commit()
+	if not mysql_db then
+		return { badresult = true, err = "mysql not connected" }
+	end
+	return mysql_cmds.query("COMMIT")
+end
+
+function mysql_cmds.rollback()
+	if not mysql_db then
+		return { badresult = true, err = "mysql not connected" }
+	end
+	return mysql_cmds.query("ROLLBACK")
+end
+
 -- ======== Redis 命令 ========
 local redis_cmds = {}
 

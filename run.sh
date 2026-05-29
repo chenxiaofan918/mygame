@@ -19,6 +19,8 @@ CONFIG="$PROJECT_DIR/server/config/config.game"
 SCHEMA="$PROJECT_DIR/server/schema.sql"
 
 MYSQL_ROOT_PASS="${MYSQL_ROOT_PASS:-}"
+DB_PASSWORD="${DB_PASSWORD:-123456}"
+REDIS_PASSWORD="${REDIS_PASSWORD:-123456}"
 
 # 颜色
 RED='\033[0;31m'
@@ -293,6 +295,18 @@ clean_logs() {
 }
 
 # ============================================
+# 生成本地配置覆盖（从环境变量，不提交到 Git）
+# ============================================
+setup_config() {
+	local local_cfg="$PROJECT_DIR/server/config/config.local"
+	cat > "$local_cfg" <<- CONF
+	db_password = "${DB_PASSWORD}"
+	redis_password = "${REDIS_PASSWORD}"
+	CONF
+	log_info "本地配置: $local_cfg（密码从环境变量注入）"
+}
+
+# ============================================
 # 启动游戏服务器
 # ============================================
 start_server() {
@@ -414,6 +428,7 @@ deploy() {
 	setup_redis
 	build_skynet
 	check_config
+	setup_config
 	start_server
 
 	echo ""
@@ -421,7 +436,7 @@ deploy() {
 	echo -e "  ${GREEN}部署完成!${NC}"
 	echo ""
 	echo "  服务器:   localhost:8888"
-	echo "  测试:     python3 client/tools/test_auto.py"
+	echo "  测试:     python3 client/tools/sproto_client.py"
 	echo "  日志:     tail -f log/game-server.log"
 	echo "  停止:     ./run.sh stop"
 	echo "========================================"
@@ -438,6 +453,7 @@ case "${1:-deploy}" in
 	start)
 		check_config
 		build_skynet
+		setup_config
 		start_server
 		;;
 	stop)

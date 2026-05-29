@@ -3,10 +3,13 @@
 local skynet = require "skynet"
 local socket = require "skynet.socket"
 local sprotoloader = require "sprotoloader"
+local const = require "const"
 
 local client_fd
 local player_id
 local state = "unauth"  -- unauth | auth
+local watchdog
+local timed_out = false
 
 -- sproto host
 local host = sprotoloader.load(1):host "package"
@@ -25,6 +28,17 @@ local function send_error(code, msg)
 	socket.write(client_fd, package)
 end
 
+-- ======== 未认证超时 ========
+local function start_unauth_timeout()
+	skynet.timeout(600, function()
+		if state == "unauth" then
+			timed_out = true
+			send_error(const.ERROR.UNAUTHORIZED, "login timeout")
+			skynet.call(watchdog, "lua", "close", client_fd)
+		end
+	end)
+end
+
 -- ======== 未认证状态 ========
 local unauth_handlers = {}
 
@@ -32,15 +46,15 @@ function unauth_handlers.login(args, response)
 	local account = args.account
 	local password = args.password
 	if not account or not password then
-		return send_error(1, "missing account or password")
+		return send_error(const.ERROR.MISSING_PARAMS, "missing account or password")
 	end
 
 	local ok, result = pcall(skynet.call, ".login", "lua", "login", account, password)
 	if not ok then
-		return send_error(2, "login service unavailable")
+		return send_error(const.ERROR.SERVICE_UNAVAILABLE, "login service unavailable")
 	end
 	if not result.ok then
-		return send_error(3, result.err or "login failed")
+		return send_error(const.ERROR.LOGIN_FAILED, result.err or "login failed")
 	end
 
 	player_id = result.player_id
@@ -63,15 +77,15 @@ function unauth_handlers.register(args, response)
 	local account = args.account
 	local password = args.password
 	if not account or not password then
-		return send_error(1, "missing account or password")
+		return send_error(const.ERROR.MISSING_PARAMS, "missing account or password")
 	end
 
 	local ok, result = pcall(skynet.call, ".login", "lua", "register", account, password)
 	if not ok then
-		return send_error(2, "login service unavailable")
+		return send_error(const.ERROR.SERVICE_UNAVAILABLE, "login service unavailable")
 	end
 	if not result.ok then
-		return send_error(4, result.err or "register failed")
+		return send_error(const.ERROR.REGISTER_FAILED, result.err or "register failed")
 	end
 
 	skynet.error("[agent] new player: " .. result.player_id)
@@ -105,9 +119,9 @@ local function request_handler(name, args, response)
 		end
 	else
 		if state == "unauth" then
-			send_error(100, "please login first")
+			send_error(const.ERROR.UNAUTHORIZED, "please login first")
 		else
-			send_error(200, "unknown command: " .. tostring(name))
+			send_error(const.ERROR.UNKNOWN_CMD, "unknown command: " .. tostring(name))
 		end
 	end
 end
@@ -117,14 +131,16 @@ local CMD = {}
 
 function CMD.start(conf)
 	client_fd = conf.client
+	watchdog = conf.watchdog
 	-- 向内置 gate 注册 forward，客户端数据直接发往本 agent
 	skynet.call(conf.gate, "lua", "forward", client_fd, 0)
 	skynet.error("[agent] new connection: fd=" .. client_fd)
+	start_unauth_timeout()
 end
 
 function CMD.disconnect()
 	skynet.error("[agent] disconnect: player=" .. tostring(player_id))
-	if player_id then
+	if player_id and not timed_out then
 		pcall(skynet.send, ".login", "lua", "logout", player_id)
 	end
 	skynet.exit()

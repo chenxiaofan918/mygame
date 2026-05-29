@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS `account` (
 	`id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 	`account`    VARCHAR(64)     NOT NULL,
 	`password`   VARCHAR(64)     NOT NULL,
-	`salt`       VARCHAR(16)     NOT NULL,
+	`salt`       VARCHAR(64)     NOT NULL,
 	`created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY (`id`),
 	UNIQUE KEY `uk_account` (`account`)

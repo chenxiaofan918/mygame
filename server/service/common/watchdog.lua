@@ -59,6 +59,18 @@ function CMD.close(fd)
 	close_agent(fd)
 end
 
+function CMD.shutdown()
+	local count = 0
+	for _ in pairs(agents) do
+		count = count + 1
+	end
+	skynet.error("[watchdog] shutting down, disconnecting " .. count .. " players")
+	for fd, _ in pairs(agents) do
+		close_agent(fd)
+	end
+	skynet.error("[watchdog] all players disconnected, skynet exiting...")
+end
+
 skynet.start(function()
 	skynet.dispatch("lua", function(session, source, cmd, subcmd, ...)
 		if cmd == "socket" then

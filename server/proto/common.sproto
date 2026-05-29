@@ -5,11 +5,12 @@
 }
 
 # 错误响应
-.error_response {
-	code 0 : integer
-	message 1 : string
+.error 1 {
+	response {
+		code 0 : integer
+		msg 1 : string
+	}
 }
 
-# 心跳
-.heartbeat_request {}
-.heartbeat_response {}
+# 心跳（无数据）
+.ping 4 {}

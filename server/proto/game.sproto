@@ -1,29 +1,33 @@
 # 游戏协议
-.enter_scene_request {
-	scene_id 0 : integer
+.chat 3 {
+	request {
+		msg 0 : string
+	}
+	response {
+		msg 0 : string
+	}
 }
 
-.enter_scene_response {
-	ok 0 : boolean
-	players 1 : *integer
+.enter_scene 10 {
+	request {
+		scene_id 0 : integer
+	}
+	response {
+		ok 0 : boolean
+	}
 }
 
-.move_request {
-	x 0 : integer
-	y 1 : integer
+.move 11 {
+	request {
+		x 0 : integer
+		y 1 : integer
+	}
 }
 
-.move_notify {
-	player_id 0 : integer
-	x 1 : integer
-	y 2 : integer
-}
-
-.chat_request {
-	msg 0 : string
-}
-
-.chat_notify {
-	player_id 0 : integer
-	msg 1 : string
+# 服务端推送
+.chat_notify 10 {
+	response {
+		player_id 0 : integer
+		msg 1 : string
+	}
 }

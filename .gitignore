@@ -32,6 +32,10 @@ dump.rdb
 # Claude Code
 .claude/
 
+# 本地配置覆盖
+server/config/config.local
+server/config/config.local.*
+
 # 临时文件
 tmp/
 temp/
