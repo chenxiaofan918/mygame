@@ -103,23 +103,25 @@ setup_mysql() {
 
 	# 先用 MYSQL_ROOT_PASS 环境变量，没有则依次尝试无密码和有密码
 	local root_pass="${MYSQL_ROOT_PASS:-123456}"
-	local mysql_login="sudo mysql -u root"
-	# 测试无密码登录
-	if ! sudo mysql -u root -e "SELECT 1;" &>/dev/null; then
-		mysql_login="mysql -u root -p'$root_pass' -h 127.0.0.1"
-		if ! mysql -u root -p"$root_pass" -h 127.0.0.1 -e "SELECT 1;" &>/dev/null; then
-			log_error "无法登录 MySQL，请检查 root 密码"
-			log_error "尝试: sudo mysql -u root -p'你的密码' < $SCHEMA"
-			return 1
-		fi
+
+	# 定义 MySQL 命令函数（避免 eval 引号问题）
+	if sudo mysql -u root -e "SELECT 1;" &>/dev/null; then
+		mysql_run() { sudo mysql -u root "$@"; }
+		log_info "使用 socket 登录 MySQL"
+	elif mysql -u root -p"$root_pass" -h 127.0.0.1 -e "SELECT 1;" &>/dev/null; then
+		mysql_run() { mysql -u root -p"$root_pass" -h 127.0.0.1 "$@"; }
 		log_info "使用密码登录 MySQL"
+	else
+		log_error "无法登录 MySQL，请检查 root 密码"
+		log_error "尝试: sudo mysql -u root -p'你的密码' < $SCHEMA"
+		return 1
 	fi
 
 	log_info "创建数据库和表..."
-	eval "$mysql_login" < "$SCHEMA" || true
+	mysql_run < "$SCHEMA" || true
 
 	local tables
-	tables=$(eval "$mysql_login" -e "USE game; SHOW TABLES;" 2>/dev/null || true)
+	tables=$(mysql_run -e "USE game; SHOW TABLES;" 2>/dev/null || true)
 
 	if echo "$tables" | grep -q "account"; then
 		log_ok "数据库初始化完成（game.account / game.player）"
@@ -128,9 +130,9 @@ setup_mysql() {
 	fi
 
 	# 配置 root 密码（兼容 MySQL 和 MariaDB）
-	eval "$mysql_login" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '123456';" 2>/dev/null || true
-	eval "$mysql_login" -e "ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '123456';" 2>/dev/null || true
-	eval "$mysql_login" -e "FLUSH PRIVILEGES;" 2>/dev/null || true
+	mysql_run -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '123456';" 2>/dev/null || true
+	mysql_run -e "ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '123456';" 2>/dev/null || true
+	mysql_run -e "FLUSH PRIVILEGES;" 2>/dev/null || true
 	# 验证密码登录
 	if mysql -u root -p'123456' -h 127.0.0.1 -e "SELECT 1;" &>/dev/null; then
 		log_ok "root 密码已配置"
@@ -144,10 +146,18 @@ setup_mysql() {
 # ============================================
 setup_redis() {
 	log_info "配置 Redis..."
-	sudo service redis-server start 2>/dev/null || sudo systemctl start redis 2>/dev/null || true
+
+	# 尝试不同的服务名启动 Redis
+	sudo service redis-server start 2>/dev/null || \
+	sudo systemctl start redis 2>/dev/null || \
+	sudo systemctl start redis-server 2>/dev/null || true
 
 	for i in $(seq 1 10); do
 		if redis-cli ping 2>/dev/null | grep -q "PONG"; then
+			break
+		fi
+		# 可能 Redis 已有密码
+		if redis-cli -a 123456 ping 2>/dev/null | grep -q "PONG"; then
 			break
 		fi
 		sleep 1
@@ -157,8 +167,11 @@ setup_redis() {
 		log_ok "Redis 已启动"
 		# 开发环境关闭密码，与config.game保持一致
 		redis-cli CONFIG SET requirepass "123456" 2>/dev/null || true
+	elif redis-cli -a 123456 ping 2>/dev/null | grep -q "PONG"; then
+		log_ok "Redis 已启动（已有密码）"
 	else
 		log_error "Redis 启动失败，请手动检查"
+		log_error "尝试: sudo systemctl start redis && redis-cli ping"
 		exit 1
 	fi
 }
@@ -355,6 +368,8 @@ show_status() {
 	fi
 
 	if redis-cli ping 2>/dev/null | grep -q "PONG"; then
+		echo -e "  Redis:     ${GREEN}运行中${NC}"
+	elif redis-cli -a 123456 ping 2>/dev/null | grep -q "PONG"; then
 		echo -e "  Redis:     ${GREEN}运行中${NC}"
 	else
 		echo -e "  Redis:     ${RED}未运行${NC}"
