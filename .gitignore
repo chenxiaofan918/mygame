@@ -3,6 +3,10 @@
 *.so
 *.dll
 
+# server/lib/ 下的 .so 是 skynet 运行时必需，不忽略
+!server/lib/cservice/*.so
+!server/lib/luaclib/*.so
+
 # 日志
 log/
 *.log
