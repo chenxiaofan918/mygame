@@ -1,6 +1,7 @@
 -- watchdog: 连接管理器
 -- 使用 skynet 内置 gate.lua 管理 TCP 连接
 local skynet = require "skynet"
+require "ylog"
 
 local CMD = {}
 local SOCKET = {}

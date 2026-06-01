@@ -21,6 +21,7 @@ SCHEMA="$PROJECT_DIR/server/schema.sql"
 MYSQL_ROOT_PASS="${MYSQL_ROOT_PASS:-}"
 DB_PASSWORD="${DB_PASSWORD:-123456}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-123456}"
+MONGO_PASSWORD="${MONGO_PASSWORD:-}"
 
 # 颜色
 RED='\033[0;31m'
@@ -125,8 +126,8 @@ setup_mysql() {
 	local tables
 	tables=$(mysql_run -e "USE game; SHOW TABLES;" 2>/dev/null || true)
 
-	if echo "$tables" | grep -q "account"; then
-		log_ok "数据库初始化完成（game.account / game.player）"
+	if echo "$tables" | grep -q "player_action_log"; then
+		log_ok "数据库初始化完成（player_action_log）"
 	else
 		log_warn "建表可能未成功，请手动检查: sudo mysql -u root < $SCHEMA"
 	fi
@@ -175,6 +176,60 @@ setup_redis() {
 		log_error "Redis 启动失败，请手动检查"
 		log_error "尝试: sudo systemctl start redis && redis-cli ping"
 		exit 1
+	fi
+}
+
+# ============================================
+# 初始化 MongoDB
+# ============================================
+setup_mongodb() {
+	log_info "配置 MongoDB..."
+
+	if command -v mongosh &>/dev/null || command -v mongo &>/dev/null; then
+		log_ok "MongoDB 已安装"
+	else
+		log_info "安装 MongoDB Community Server..."
+		if command -v apt &>/dev/null; then
+			wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | sudo apt-key add - 2>/dev/null || true
+			local distro
+			distro=$(command -v lsb_release &>/dev/null && lsb_release -cs || echo "jammy")
+			echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $distro/mongodb-org/7.0 multiverse" | \
+				sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list > /dev/null
+			sudo apt update
+			sudo apt install -y mongodb-org
+		elif command -v yum &>/dev/null; then
+			echo "[mongodb-org-7.0]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/7.0/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-7.0.asc" | \
+				sudo tee /etc/yum.repos.d/mongodb-org-7.0.repo > /dev/null
+			sudo yum install -y mongodb-org
+		else
+			log_warn "不支持的包管理器，请手动安装 MongoDB"
+			log_warn "参考: https://www.mongodb.com/docs/manual/installation/"
+		fi
+	fi
+
+	sudo service mongod start 2>/dev/null || \
+	sudo systemctl start mongod 2>/dev/null || true
+
+	for i in $(seq 1 15); do
+		if command -v mongosh &>/dev/null; then
+			echo "db.runCommand({ping:1})" | mongosh --quiet 2>/dev/null | grep -q "ok" && break
+		elif command -v mongo &>/dev/null; then
+			echo "db.runCommand({ping:1})" | mongo --quiet 2>/dev/null | grep -q "ok" && break
+		fi
+		sleep 1
+	done
+
+	if command -v mongosh &>/dev/null; then
+		echo 'db.runCommand({ping:1})' | mongosh --quiet > /dev/null 2>&1 && \
+			log_ok "MongoDB 已启动" || log_warn "MongoDB 启动可能失败"
+	elif command -v mongo &>/dev/null; then
+		echo 'db.runCommand({ping:1})' | mongo --quiet > /dev/null 2>&1 && \
+			log_ok "MongoDB 已启动" || log_warn "MongoDB 启动可能失败"
 	fi
 }
 
@@ -230,6 +285,22 @@ update_skynet() {
 
 	make linux MALLOC_STATICLIB= SKYNET_DEFINES=-DNOUSE_JEMALLOC -j$(nproc) 2>&1 | tail -3
 
+	# 编译 MongoDB 驱动（skynet.mongo.driver）
+	log_info "编译 MongoDB 驱动..."
+	if [ -f lualib-src/skynet_mongo_driver.c ]; then
+		mkdir -p luaclib/skynet/mongo
+		$CC -std=gnu99 -O2 -fPIC -shared -I skynet-src -I lualib-src \
+			-o luaclib/skynet/mongo/driver.so \
+			lualib-src/skynet_mongo_driver.c 2>&1 | tail -2
+		if [ -f luaclib/skynet/mongo/driver.so ]; then
+			log_ok "MongoDB 驱动编译成功"
+		else
+			log_warn "MongoDB 驱动编译失败，将使用降级模式"
+		fi
+	else
+		log_warn "未找到 MongoDB 驱动源码，跳过编译"
+	fi
+
 	if [ ! -f skynet ]; then
 		log_error "编译失败"
 		rm -rf "$tmp_dir"
@@ -248,6 +319,13 @@ update_skynet() {
 	cp -r service/. "$lib_dir/service/" 2>/dev/null || true
 	cp -r luaclib/. "$lib_dir/luaclib/" 2>/dev/null || true
 	cp -r cservice/. "$lib_dir/cservice/" 2>/dev/null || true
+
+	# 复制 MongoDB 驱动（如果编译成功）
+	if [ -f luaclib/skynet/mongo/driver.so ]; then
+		mkdir -p "$lib_dir/luaclib/skynet/mongo"
+		cp luaclib/skynet/mongo/driver.so "$lib_dir/luaclib/skynet/mongo/"
+		log_ok "MongoDB 驱动已复制"
+	fi
 
 	echo "$commit" > "$SKYNET_VER_FILE"
 
@@ -295,6 +373,53 @@ clean_logs() {
 }
 
 # ============================================
+# 获取 MySQL 连接命令（socket 优先，密码后备）
+# ============================================
+get_mysql_cmd() {
+	local root_pass="${MYSQL_ROOT_PASS:-123456}"
+	if sudo mysql -u root -e "SELECT 1;" &>/dev/null; then
+		echo "sudo mysql -u root"
+	elif mysql -u root -p"$root_pass" -h 127.0.0.1 -e "SELECT 1;" &>/dev/null; then
+		echo "mysql -u root -p'$root_pass' -h 127.0.0.1"
+	else
+		echo ""
+	fi
+}
+
+# ============================================
+# 清理数据库（开发环境重置用）
+# ============================================
+clean_dbs() {
+	log_info "清理 MySQL 日志表..."
+	local mysql_cmd
+	mysql_cmd=$(get_mysql_cmd)
+	if [ -n "$mysql_cmd" ]; then
+		eval "$mysql_cmd -e 'TRUNCATE TABLE game.player_action_log;'" 2>/dev/null || true
+		log_ok "MySQL 日志表已清空"
+	else
+		log_warn "无法连接 MySQL，跳过"
+	fi
+
+	log_info "清理 MongoDB 数据..."
+	if command -v mongosh &>/dev/null; then
+		echo 'use game; db.account.drop(); db.player.drop();' | mongosh --quiet 2>/dev/null || true
+		log_ok "MongoDB 数据已清除"
+	elif command -v mongo &>/dev/null; then
+		echo 'use game; db.account.drop(); db.player.drop();' | mongo --quiet 2>/dev/null || true
+		log_ok "MongoDB 数据已清除"
+	else
+		log_warn "无法连接 MongoDB，跳过"
+	fi
+
+	log_info "清理 Redis 数据..."
+	if redis-cli -a 123456 FLUSHDB 2>/dev/null | grep -q "OK"; then
+		log_ok "Redis 数据已清除"
+	else
+		redis-cli FLUSHDB 2>/dev/null || log_warn "Redis 清理失败，跳过"
+	fi
+}
+
+# ============================================
 # 生成本地配置覆盖（从环境变量，不提交到 Git）
 # ============================================
 setup_config() {
@@ -302,6 +427,7 @@ setup_config() {
 	cat > "$local_cfg" <<- CONF
 	db_password = "${DB_PASSWORD}"
 	redis_password = "${REDIS_PASSWORD}"
+	mongo_password = "${MONGO_PASSWORD}"
 	CONF
 	log_info "本地配置: $local_cfg（密码从环境变量注入）"
 }
@@ -389,6 +515,18 @@ show_status() {
 		echo -e "  Redis:     ${RED}未运行${NC}"
 	fi
 
+	if command -v mongosh &>/dev/null; then
+		echo "db.runCommand({ping:1})" | mongosh --quiet 2>/dev/null | grep -q "ok" && \
+			echo -e "  MongoDB:   ${GREEN}运行中${NC}" || \
+			echo -e "  MongoDB:   ${RED}未运行${NC}"
+	elif command -v mongo &>/dev/null; then
+		echo "db.runCommand({ping:1})" | mongo --quiet 2>/dev/null | grep -q "ok" && \
+			echo -e "  MongoDB:   ${GREEN}运行中${NC}" || \
+			echo -e "  MongoDB:   ${RED}未运行${NC}"
+	else
+		echo -e "  MongoDB:   ${YELLOW}未安装${NC}"
+	fi
+
 	if [ -f "$PROJECT_DIR/skynet.pid" ]; then
 		local pid
 		pid=$(cat "$PROJECT_DIR/skynet.pid" 2>/dev/null)
@@ -426,6 +564,7 @@ deploy() {
 	install_deps
 	setup_mysql
 	setup_redis
+	setup_mongodb
 	build_skynet
 	check_config
 	setup_config
@@ -466,7 +605,9 @@ case "${1:-deploy}" in
 		start_server
 		;;
 	clean)
+		stop_server
 		clean_logs
+		clean_dbs
 		;;
 	status)
 		show_status

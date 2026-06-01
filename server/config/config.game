@@ -27,5 +27,12 @@ redis_host = "127.0.0.1"
 redis_port = 6379
 redis_password = "123456"
 
+-- MongoDB配置
+mongo_host = "127.0.0.1"
+mongo_port = 27017
+mongo_db = "game"
+mongo_username = ""
+mongo_password = ""
+
 -- 本地覆盖（由 run.sh 生成，不提交到 Git）
 include "config.local"

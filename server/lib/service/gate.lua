@@ -1,4 +1,5 @@
 local skynet = require "skynet"
+require "ylog"
 local gateserver = require "snax.gateserver"
 
 local watchdog
@@ -55,11 +56,19 @@ local function close_fd(fd)
 end
 
 function handler.disconnect(fd)
-	close_fd(fd)
-	skynet.send(watchdog, "lua", "socket", "close", fd)
+	local c = connection[fd]
+	skynet.error("[gate] disconnect fd=" .. fd .. " c=" .. tostring(c) .. " agent=" .. tostring(c and c.agent) .. " pending=" .. tostring(c and c.pending_close))
+	if c and c.agent then
+		close_fd(fd)
+		skynet.send(watchdog, "lua", "socket", "close", fd)
+	elseif c then
+		c.pending_close = true
+	end
 end
 
 function handler.error(fd, msg)
+	local c = connection[fd]
+	skynet.error("[gate] error fd=" .. fd .. " msg=" .. tostring(msg) .. " agent=" .. tostring(c and c.agent))
 	close_fd(fd)
 	skynet.send(watchdog, "lua", "socket", "error", fd, msg)
 end
@@ -76,6 +85,13 @@ function CMD.forward(source, fd, client, address)
 	c.client = client or 0
 	c.agent = address or source
 	gateserver.openclient(fd)
+	-- 如果有延迟关闭请求，forward 完成后立即执行
+	if c.pending_close then
+		skynet.error("[gate] forward detected pending_close for fd=" .. fd)
+		c.pending_close = nil
+		close_fd(fd)
+		skynet.send(watchdog, "lua", "socket", "close", fd)
+	end
 end
 
 function CMD.accept(source, fd)

@@ -1,6 +1,7 @@
 -- agent: 玩家代理服务，sproto 协议
 -- 状态机: unauth → auth → disconnected
 local skynet = require "skynet"
+require "ylog"
 local socket = require "skynet.socket"
 local sprotoloader = require "sprotoloader"
 local const = require "const"
@@ -30,7 +31,7 @@ end
 
 -- ======== 未认证超时 ========
 local function start_unauth_timeout()
-	skynet.timeout(600, function()
+	skynet.timeout(60000, function()
 		if state == "unauth" then
 			timed_out = true
 			send_error(const.ERROR.UNAUTHORIZED, "login timeout")

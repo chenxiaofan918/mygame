@@ -1,4 +1,5 @@
 local skynet = require "skynet"
+require "ylog"
 
 skynet.start(function()
 	skynet.error("[" .. skynet.getenv "name" .. "] starting...")
@@ -12,8 +13,20 @@ skynet.start(function()
 		skynet.newservice("debug_console", debug_port)
 	end
 
-	-- 数据库代理
-	skynet.newservice("db/dbproxy")
+	-- Redis 代理（令牌/在线/限流/缓存）
+	skynet.newservice("db/redisproxy")
+
+	-- MySQL 代理（仅玩家操作日志）
+	skynet.newservice("db/mysqlproxy")
+
+	-- MongoDB 代理
+	skynet.newservice("db/mongoproxy")
+
+	-- 玩家数据服务
+	skynet.uniqueservice("game/player")
+
+	-- 玩家操作日志服务
+	skynet.newservice("log/player_log")
 
 	-- 登录服务
 	skynet.uniqueservice("login/login")

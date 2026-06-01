@@ -1,20 +1,22 @@
 -- login: 登录注册服务
--- 通过 dbproxy 完成账号的 CRUD 和会话管理
+-- 账号/玩家数据: MongoDB, 令牌/在线状态/限流: Redis
 local skynet = require "skynet"
+require "ylog"
 require "skynet.manager"
 local crypt = require "skynet.crypt"
 local const = require "const"
 
-local DB = ".dbproxy"
+local DB = ".redisproxy"     -- Redis 操作
+local MONGO = ".mongoproxy"  -- MongoDB 操作
 
 local CMD = {}
 
 -- 速率限制（5 分钟内最多 5 次失败）
 local RATE_LIMIT_MAX = 5
-local RATE_LIMIT_WINDOW = 300  -- 5 秒 * 60 = 300 秒
+local RATE_LIMIT_WINDOW = 300
 
 local function check_ratelimit(key)
-	local count = skynet.call(DB, "lua", "redis.get_int", "ratelimit:" .. key)
+	local count = skynet.call(DB, "lua", "get_int", "ratelimit:" .. key)
 	if count >= RATE_LIMIT_MAX then
 		return false
 	end
@@ -22,12 +24,12 @@ local function check_ratelimit(key)
 end
 
 local function incr_ratelimit(key)
-	skynet.call(DB, "lua", "redis.call", "INCR", "ratelimit:" .. key)
-	skynet.call(DB, "lua", "redis.call", "EXPIRE", "ratelimit:" .. key, RATE_LIMIT_WINDOW)
+	skynet.call(DB, "lua", "call", "INCR", "ratelimit:" .. key)
+	skynet.call(DB, "lua", "call", "EXPIRE", "ratelimit:" .. key, RATE_LIMIT_WINDOW)
 end
 
 local function reset_ratelimit(key)
-	skynet.call(DB, "lua", "redis.call", "del", "ratelimit:" .. key)
+	skynet.call(DB, "lua", "call", "del", "ratelimit:" .. key)
 end
 
 -- 密码加盐哈希（迭代 SHA1，100 轮，防暴力破解）
@@ -66,55 +68,53 @@ function CMD.register(account, password)
 	end
 	incr_ratelimit("reg:" .. account)
 
-	local qaccount = skynet.call(DB, "lua", "mysql.quote", account)
-
 	-- 检查账号是否已存在
-	local rows = skynet.call(DB, "lua", "mysql.query",
-		"SELECT id FROM account WHERE account = " .. qaccount .. " LIMIT 1")
-
-	if rows and #rows > 0 then
+	local existing = skynet.call(MONGO, "lua", "mongo.find_one", "account", { account = account })
+	if existing then
 		return { ok = false, err = "account already exists", errcode = const.ERROR.ACCOUNT_EXISTS }
 	end
 
-	-- 创建账号（事务保护：account + player 同时成功或回滚）
-	skynet.call(DB, "lua", "mysql.begin")
-	local ok_create, player_id = pcall(function()
-		local salt = make_salt()
-		local pwhash = hash_password(salt, password)
-		local quoted_pw = skynet.call(DB, "lua", "mysql.quote", pwhash)
-		local quoted_salt = skynet.call(DB, "lua", "mysql.quote", salt)
+	-- 生成 player_id（Redis 自增）
+	local player_id = skynet.call(DB, "lua", "gen_id", "player:id")
 
-		local result = skynet.call(DB, "lua", "mysql.execute",
-			"INSERT INTO account (account, password, salt, created_at) VALUES (" ..
-			qaccount .. ", " .. quoted_pw .. ", " .. quoted_salt .. ", NOW())")
+	-- 密码哈希
+	local salt = make_salt()
+	local pwhash = hash_password(salt, password)
+	local now = os.time()
 
-		if not result or result.badresult then
-			error(result and result.err or "insert account failed")
-		end
-
-		local pid = result.insert_id
-
-		-- 创建初始玩家数据
-		local player_result = skynet.call(DB, "lua", "mysql.execute",
-			"INSERT INTO player (id, nickname, level, created_at) VALUES (" ..
-			pid .. ", " .. qaccount .. ", 1, NOW())")
-
-		if not player_result or player_result.badresult then
-			error(player_result and player_result.err or "insert player failed")
-		end
-
-		return pid
-	end)
-
-	if ok_create then
-		skynet.call(DB, "lua", "mysql.commit")
-		skynet.error("[login] new account: " .. account .. " -> player_id: " .. player_id)
-		return { ok = true, player_id = player_id }
-	else
-		skynet.call(DB, "lua", "mysql.rollback")
-		skynet.error("[login] register failed: " .. tostring(player_id))
-		return { ok = false, err = "db error: " .. tostring(player_id), errcode = const.ERROR.FAIL }
+	-- 创建账号文档
+	local account_result = skynet.call(MONGO, "lua", "mongo.insert_safe", "account", {
+		player_id = player_id,
+		account = account,
+		password = pwhash,
+		salt = salt,
+		created_at = now,
+	})
+	if not account_result or account_result.badresult then
+		return { ok = false, err = "db error: create account failed", errcode = const.ERROR.FAIL }
 	end
+
+	-- 创建玩家数据文档
+	local player_result = skynet.call(MONGO, "lua", "mongo.insert_safe", "player", {
+		player_id = player_id,
+		nickname = account,
+		level = 1,
+		exp = 0,
+		vip_level = 0,
+		gold = 0,
+		diamond = 0,
+		created_at = now,
+		updated_at = now,
+	})
+	if not player_result or player_result.badresult then
+		-- 回滚：删除已创建的账号
+		skynet.call(MONGO, "lua", "mongo.delete_one", "account", { player_id = player_id })
+		skynet.error("[login] register rollback account " .. player_id .. " for player creation failure")
+		return { ok = false, err = "db error: create player failed", errcode = const.ERROR.FAIL }
+	end
+
+	skynet.error("[login] new account: " .. account .. " -> player_id: " .. player_id)
+	return { ok = true, player_id = player_id }
 end
 
 -- 登录
@@ -123,17 +123,13 @@ function CMD.login(account, password)
 		return { ok = false, err = "too many attempts, try later", errcode = const.ERROR.FAIL }
 	end
 
-	local qaccount = skynet.call(DB, "lua", "mysql.quote", account)
+	local row = skynet.call(MONGO, "lua", "mongo.find_one", "account", { account = account })
 
-	local rows = skynet.call(DB, "lua", "mysql.query",
-		"SELECT id, password, salt FROM account WHERE account = " .. qaccount .. " LIMIT 1")
-
-	if not rows or #rows == 0 then
+	if not row then
 		incr_ratelimit("login:" .. account)
 		return { ok = false, err = "account not found", errcode = const.ERROR.ACCOUNT_NOT_EXIST }
 	end
 
-	local row = rows[1]
 	local pwhash = hash_password(row.salt, password)
 
 	if pwhash ~= row.password then
@@ -143,23 +139,24 @@ function CMD.login(account, password)
 
 	-- 登录成功，清除失败计数
 	reset_ratelimit("login:" .. account)
-	local player_id = row.id
+	local player_id = row.player_id
 
 	-- 查询基础玩家数据
-	local players = skynet.call(DB, "lua", "mysql.query",
-		"SELECT nickname, level, exp FROM player WHERE id = " .. player_id .. " LIMIT 1")
-
 	local player_data = {}
-	if players and #players > 0 then
-		player_data = players[1]
+	local player = skynet.call(MONGO, "lua", "mongo.find_one", "player", { player_id = player_id })
+	if player then
+		player_data = player
+		-- 异步预热缓存
+		skynet.send(".player", "lua", "cache", player_id, player)
 	end
 
 	-- 生成 token 并写入 Redis (24h 过期)
 	local token = make_token(player_id)
-	skynet.call(DB, "lua", "redis.setex", "token:" .. token, player_id, 86400)
-	skynet.call(DB, "lua", "redis.setex", "online:" .. player_id, token, 86400)
+	skynet.call(DB, "lua", "setex", "token:" .. token, player_id, 86400)
+	skynet.call(DB, "lua", "setex", "online:" .. player_id, token, 86400)
 
 	skynet.error("[login] player login: " .. player_id .. " (" .. account .. ")")
+	skynet.send(".player_log", "lua", "log", player_id, "login", {})
 	return {
 		ok = true,
 		player_id = player_id,
@@ -174,7 +171,7 @@ function CMD.auth(token)
 	if not token then
 		return nil
 	end
-	local player_id = skynet.call(DB, "lua", "redis.get_int", "token:" .. token)
+	local player_id = skynet.call(DB, "lua", "get_int", "token:" .. token)
 	if player_id == 0 then
 		return nil
 	end
@@ -184,15 +181,16 @@ end
 -- 登出
 function CMD.logout(player_id, token)
 	if token then
-		skynet.call(DB, "lua", "redis.call", "del", "token:" .. token)
+		skynet.call(DB, "lua", "call", "del", "token:" .. token)
 	end
-	skynet.call(DB, "lua", "redis.call", "del", "online:" .. player_id)
+	skynet.call(DB, "lua", "call", "del", "online:" .. player_id)
 	skynet.error("[login] player logout: " .. tostring(player_id))
+	skynet.send(".player_log", "lua", "log", player_id, "logout", {})
 	return { ok = true }
 end
 
 skynet.start(function()
-	skynet.dispatch("lua", function(session, source, cmd, ...)
+	skynet.dispatch("lua", function(_session, _source, cmd, ...)
 		local f = assert(CMD[cmd], "unknown login cmd: " .. tostring(cmd))
 		skynet.ret(skynet.pack(f(...)))
 	end)
