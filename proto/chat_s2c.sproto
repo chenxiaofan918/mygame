@@ -1,0 +1,17 @@
+# 聊天系统 — 服务端推送协议
+chat_notify 10 {
+	response {
+		player_id 0 : integer
+		msg 1 : string
+	}
+}
+
+chat_message 11 {
+	response {
+		channel 0 : integer
+		from_id 1 : integer
+		from_name 2 : string
+		msg 3 : string
+		timestamp 4 : integer
+	}
+}

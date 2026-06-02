@@ -22,8 +22,7 @@ local function encode_val(v)
 		for k in pairs(v) do
 			if type(k) ~= "number" or k < 1 or k ~= math.floor(k) then
 				is_array = false
-			end
-			if k > max_key then
+			elseif k > max_key then
 				max_key = k
 			end
 		end

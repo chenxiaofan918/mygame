@@ -1,125 +1,61 @@
 #!/usr/bin/env python3
 """
-sproto 协议测试客户端（纯 Python 实现，无 C 扩展依赖）
-用法: python sproto_client.py [host] [port]
+sproto 协议测试客户端（纯 Python 实现）
+自动从 .sproto 文件加载协议定义，支持所有已定义协议。
 
-通信协议: 2字节大端长度前缀 + sproto 二进制
+用法: python sproto_client.py [host] [port]
 """
+
 import json
 import socket
 import struct
 import sys
 import threading
 import time
+from pathlib import Path
 
-# ======== 纯 Python sproto 编解码 ========
+from sproto_parser import SprotoParser, T_INTEGER, T_BOOLEAN, T_STRING
 
-# sproto 类型常量
-T_INTEGER = 0
-T_BOOLEAN = 1
-T_STRING = 2
-
-# 协议定义: (tag, type, name)
-# 按 tag 顺序排列
-PKG_FIELDS = [
-    (0, T_INTEGER, "type"),
-    (1, T_INTEGER, "session"),
-]
-
-# c2s 协议（客户端→服务器）
-C2S_PROTO = {
-    "login": {
-        "tag": 1,
-        "request": [
-            (0, T_STRING, "account"),
-            (1, T_STRING, "password"),
-        ],
-        "response": [
-            (0, T_BOOLEAN, "ok"),
-            (1, T_INTEGER, "player_id"),
-            (2, T_STRING, "token"),
-            (3, T_STRING, "nickname"),
-            (4, T_INTEGER, "level"),
-        ],
-    },
-    "register": {
-        "tag": 2,
-        "request": [
-            (0, T_STRING, "account"),
-            (1, T_STRING, "password"),
-        ],
-        "response": [
-            (0, T_BOOLEAN, "ok"),
-            (1, T_INTEGER, "player_id"),
-        ],
-    },
-    "chat": {
-        "tag": 3,
-        "request": [
-            (0, T_STRING, "msg"),
-        ],
-        "response": [
-            (0, T_STRING, "msg"),
-        ],
-    },
-    "ping": {
-        "tag": 4,
-        "request": [],
-        "response": [],
-    },
-}
-
-# s2c 协议（服务器→客户端）
-S2C_PROTO = {
-    "error": {
-        "tag": 1,
-        "response": [
-            (0, T_INTEGER, "code"),
-            (1, T_STRING, "msg"),
-        ],
-    },
-    "chat_notify": {
-        "tag": 10,
-        "response": [
-            (0, T_INTEGER, "player_id"),
-            (1, T_STRING, "msg"),
-        ],
-    },
-}
+# ======== 加载协议定义 ========
+PROTO_DIR = str(Path(__file__).resolve().parent / "../../proto")
+_parser = SprotoParser()
+_parser.load_dir(PROTO_DIR)
+C2S_PROTO = _parser.build_c2s()
+S2C_PROTO = _parser.build_s2c()
 
 # tag -> name 映射
 C2S_BY_TAG = {v["tag"]: k for k, v in C2S_PROTO.items()}
 S2C_BY_TAG = {v["tag"]: k for k, v in S2C_PROTO.items()}
+# s2c 协议也加入 C2S_BY_TAG（服务器推送）
+for k, v in S2C_PROTO.items():
+    C2S_BY_TAG[v["tag"]] = k
+
+# 类型定义查询（供嵌套结构体解码用）
+SPROTO_TYPES = _parser.types
+
+# ======== sproto 编解码 ========
+
+PKG_FIELDS = [
+    (0, T_INTEGER, "type", False, ""),
+    (1, T_INTEGER, "session", False, ""),
+]
 
 
 def encode_struct(fields, data):
     """
-    sproto 结构体编码
-
-    Header: 2字节 field_count (LE) + N*2 字节 per-field entries (LE uint16)
-    Data: 每字段数据依次排列
-
-    per-field entry:
-    - 偶数 > 0: 小整数内联, 值 = (entry/2) - 1
-    - 奇数: tag 跳转标记
-    - 0: 数据在 data section
-
-    整数 ≥ 32767 时存到 data section: 4字节长度 + 4字节值 (LE)
-    字符串: 4字节长度 + UTF-8 数据
-    布尔: 1字节 (0/1)
+    编码 sproto 结构体。
+    fields: [(tag, type, name, is_array)]
+    data: {name: value}
     """
     entries = bytearray()
     data_section = bytearray()
     index = 0
     lasttag = -1
 
-    for tag, ftype, name in fields:
-        if name not in data:
+    for tag, ftype, name, is_array, type_name in fields:
+        if name not in data or data[name] is None:
             continue
-
         value = data[name]
-        if value is None:
-            continue
 
         # tag 跳转
         gap = tag - lasttag - 1
@@ -128,7 +64,22 @@ def encode_struct(fields, data):
             entries.extend(struct.pack("<H", skip & 0xFFFF))
             index += 1
 
-        if ftype == T_INTEGER:
+        if is_array:
+            # 数组: 先写元素个数，再写每个元素
+            items = list(value) if value else []
+            entries.extend(struct.pack("<H", 0))
+            data_section.extend(struct.pack("<I", len(items)))
+            sub_type = SPROTO_TYPES.get(type_name)
+            for item in items:
+                if sub_type and isinstance(item, dict):
+                    encoded = encode_struct(sub_type, item)
+                elif isinstance(item, dict):
+                    encoded = encode_struct(fields, item)
+                else:
+                    encoded = str(item).encode() if isinstance(item, str) else b""
+                data_section.extend(struct.pack("<I", len(encoded)))
+                data_section.extend(encoded)
+        elif ftype == T_INTEGER:
             if isinstance(value, int) and 0 <= value < 0x7FFF:
                 inline = (value + 1) * 2
                 entries.extend(struct.pack("<H", inline & 0xFFFF))
@@ -136,11 +87,9 @@ def encode_struct(fields, data):
                 entries.extend(struct.pack("<H", 0))
                 data_section.extend(struct.pack("<I", 4))
                 data_section.extend(struct.pack("<I", int(value) & 0xFFFFFFFF))
-
         elif ftype == T_BOOLEAN:
             entries.extend(struct.pack("<H", 0))
             data_section.extend(bytes([1 if value else 0]))
-
         elif ftype == T_STRING:
             entries.extend(struct.pack("<H", 0))
             encoded = value.encode("utf-8") if isinstance(value, str) else value
@@ -155,65 +104,73 @@ def encode_struct(fields, data):
 
 
 def decode_struct(fields, data):
-    """
-    sproto 结构体解码
-    返回: {name: value}
-    """
+    """解码 sproto 结构体，返回 {name: value}"""
     if not data or len(data) < 2:
         return {}
 
     result = {}
     pos = 0
-
     field_count = struct.unpack_from("<H", data, pos)[0]
     pos += 2
 
-    # 读取 per-field entries
     entries_end = pos + field_count * 2
     entries = []
     while pos < entries_end and pos + 2 <= len(data):
         entries.append(struct.unpack_from("<H", data, pos)[0])
         pos += 2
 
-    # data section 从此开始
     data_start = pos
-
-    # 根据 entries 和 fields 解码
     data_pos = data_start
     field_idx = 0
     lasttag = -1
 
     for entry in entries:
-        # 判断是否为 tag 跳转
         if entry % 2 == 1:
-            # 奇数: tag 跳转
             skip_val = (entry - 1) // 2 + 1
             lasttag += skip_val
             continue
 
-        # 找下一个 field
         while field_idx < len(fields) and fields[field_idx][0] <= lasttag:
             field_idx += 1
         if field_idx >= len(fields):
             break
 
-        tag, ftype, name = fields[field_idx]
+        tag, ftype, name, is_array, type_name = fields[field_idx]
         lasttag = tag
         field_idx += 1
 
         if entry % 2 == 0 and entry > 0:
-            # 偶数 > 0: 内联小整数
             result[name] = (entry // 2) - 1
         else:
-            # entry == 0: 从 data section 读取
             if data_pos >= len(data):
                 result[name] = None if ftype == T_STRING else (False if ftype == T_BOOLEAN else 0)
                 continue
 
-            if ftype == T_BOOLEAN:
+            if is_array:
+                if data_pos + 4 > len(data):
+                    result[name] = []
+                    continue
+                count = struct.unpack_from("<I", data, data_pos)[0]
+                data_pos += 4
+                items = []
+                sub_type = SPROTO_TYPES.get(type_name)
+                for _ in range(count):
+                    if data_pos + 4 > len(data):
+                        break
+                    item_len = struct.unpack_from("<I", data, data_pos)[0]
+                    data_pos += 4
+                    if data_pos + item_len > len(data):
+                        break
+                    item_raw = data[data_pos:data_pos + item_len]
+                    if sub_type:
+                        items.append(decode_struct(sub_type, item_raw))
+                    else:
+                        items.append(item_raw.decode("utf-8", errors="replace"))
+                    data_pos += item_len
+                result[name] = items
+            elif ftype == T_BOOLEAN:
                 result[name] = data[data_pos] != 0
                 data_pos += 1
-
             elif ftype == T_INTEGER:
                 if data_pos + 8 > len(data):
                     result[name] = 0
@@ -225,7 +182,6 @@ def decode_struct(fields, data):
                     data_pos += 4
                 else:
                     data_pos += length
-
             elif ftype == T_STRING:
                 if data_pos + 4 > len(data):
                     result[name] = ""
@@ -241,20 +197,10 @@ def decode_struct(fields, data):
     return result
 
 
-def encode_proto_package(type_tag, session):
-    """编码协议包头"""
-    return encode_struct(PKG_FIELDS, {"type": type_tag, "session": session})
-
-
-def decode_proto_package(data):
-    """解码协议包头"""
-    return decode_struct(PKG_FIELDS, data)
-
-
 # ======== sproto pack/unpack 压缩 ========
 
 def sproto_pack(data):
-    """sproto pack 压缩: 8字节分组, 零值压缩"""
+    """sproto pack 压缩"""
     result = bytearray()
     i = 0
     ff_n = 0
@@ -290,7 +236,6 @@ def sproto_pack(data):
             if ff_n > 0:
                 result[ff_des_pos + 1] = ff_n - 1
                 ff_n = 0
-
             if notzero == 0:
                 result.append(0)
             else:
@@ -309,11 +254,9 @@ def sproto_unpack(data):
     """sproto unpack 解压缩"""
     result = bytearray()
     pos = 0
-
     while pos < len(data):
         header = data[pos]
         pos += 1
-
         if header == 0xFF:
             if pos >= len(data):
                 break
@@ -328,12 +271,10 @@ def sproto_unpack(data):
                     pos += 1
                 else:
                     result.append(0)
-
     return bytes(result)
 
 
 # ======== 网络层 ========
-
 
 def recv_n(sock, n):
     data = bytearray()
@@ -346,7 +287,6 @@ def recv_n(sock, n):
 
 
 def recv_packet(sock):
-    """读取一帧: 2字节大端长度 + packed sproto数据"""
     header = recv_n(sock, 2)
     if not header:
         return None
@@ -358,7 +298,6 @@ def recv_packet(sock):
 
 
 def send_packet(sock, data):
-    """发送一帧: 先 pack 压缩, 再加 2字节大端长度前缀"""
     packed = sproto_pack(data)
     packet = struct.pack(">H", len(packed)) + packed
     sock.sendall(packet)
@@ -375,58 +314,60 @@ def encode_request(name, args=None):
     """编码请求: 包头 + 请求体"""
     global _session_id
 
-    proto = C2S_PROTO.get(name)
+    proto = C2S_PROTO.get(name) or S2C_PROTO.get(name)
     if not proto:
         raise ValueError(f"未知协议: {name}")
 
     tag = proto["tag"]
-
     with _session_lock:
         session = _session_id
         _session_id += 1
         _pending[session] = name
 
-    header = encode_proto_package(tag, session)
+    header = encode_struct(PKG_FIELDS, {"type": tag, "session": session})
     body = encode_struct(proto["request"], args or {})
     return header + body, session
 
 
 def decode_response(data):
     """解码服务器响应 -> (name, body_dict)"""
-    pkg = decode_proto_package(data)
-    tag = pkg.get("type", 0)
-    session = pkg.get("session", 0)
+    pkg = decode_struct(PKG_FIELDS, data)
+    tag = pkg.get("type", 0) or 0
+    session = pkg.get("session", 0) or 0
 
-    # 计算包头长度
-    header_len = len(encode_proto_package(tag, session))
+    header_len = len(encode_struct(PKG_FIELDS, {"type": tag, "session": session}))
     body_data = data[header_len:]
 
+    # 先按 tag 查找（error 等独立协议优先于 session 匹配）
+    name = C2S_BY_TAG.get(tag)
+    if name:
+        proto = C2S_PROTO.get(name) or S2C_PROTO.get(name)
+        if proto and proto["response"]:
+            # 清理 pending session（防止内存泄漏）
+            if session != 0:
+                with _session_lock:
+                    _pending.pop(session, None)
+            resp = decode_struct(proto["response"], body_data)
+            return name, resp
+
+    # 按 session 匹配请求（兼容无独立 response 定义的协议）
     if session != 0:
-        # 请求响应
         with _session_lock:
             name = _pending.pop(session, None)
         if name and name in C2S_PROTO:
             resp = decode_struct(C2S_PROTO[name]["response"], body_data)
             return name, resp
-        # fallback: 按 tag 查找
-        name = C2S_BY_TAG.get(tag)
-        if name:
-            resp = decode_struct(C2S_PROTO[name]["response"], body_data)
-            return name, resp
-        return "unknown", {"tag": tag, "session": session}
-    else:
-        # 服务器推送
-        name = S2C_BY_TAG.get(tag)
-        if name:
-            resp = decode_struct(S2C_PROTO[name]["response"], body_data)
-            return name, resp
-        return "unknown_push", {"tag": tag}
+
+    return "unknown", {"tag": tag, "session": session}
 
 
 # ======== 交互式客户端 ========
 
 HOST = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8888
+
+# 不需要 body 的协议
+NO_ARGS_PROTO = {"ping", "bag_list", "bag_sort"}
 
 
 def recv_loop(sock):
@@ -441,8 +382,8 @@ def recv_loop(sock):
                 body_str = json.dumps(body, ensure_ascii=False)
                 if msg_name == "error":
                     print(f"\n[← 错误] code={body.get('code')}, msg={body.get('msg')}")
-                elif msg_name == "chat_notify":
-                    print(f"\n[← 聊天推送] {body_str}")
+                elif msg_name in ("chat_notify", "chat_message"):
+                    print(f"\n[← 推送] {body_str}")
                 else:
                     print(f"\n[← {msg_name}] {body_str}")
         except Exception as e:
@@ -450,74 +391,86 @@ def recv_loop(sock):
             break
 
 
+def print_help():
+    cmds = [
+        ("register <account> <pass>", "注册"),
+        ("login <account> <pass>", "登录"),
+        ("ping", "心跳"),
+    ]
+    for name in sorted(C2S_PROTO):
+        if name in ("login", "register", "ping"):
+            continue
+        proto = C2S_PROTO[name]
+        req_fields = proto["request"]
+        args_hint = " ".join(f"<{f[2]}>" for f in req_fields) if req_fields else ""
+        cmds.append((f"{name} {args_hint}", f"(tag {proto['tag']})"))
+    cmds.append(("q", "退出"))
+    print("协议列表:")
+    for cmd, desc in cmds:
+        print(f"  {cmd:40s} {desc}")
+
+
 def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((HOST, PORT))
     print(f"[连接] {HOST}:{PORT}")
-
     sock.settimeout(None)
     threading.Thread(target=recv_loop, args=(sock,), daemon=True).start()
     time.sleep(0.3)
 
-    print("""
-    ═════════ sproto 测试客户端 ═════════
-    register <account> <password>  注册
-    login <account> <password>     登录
-    chat <msg>                     发送聊天
-    ping                           心跳
-    q                              退出
-    ═════════════════════════════════════
-    """)
+    print("\n加载协议:")
+    print(f"  c2s: {len(C2S_PROTO)} protocols")
+    print(f"  s2c: {len(S2C_PROTO)} protocols")
+    print()
+    print_help()
 
     while True:
         try:
             line = input("> ").strip()
         except (EOFError, KeyboardInterrupt):
             break
-
         if not line:
             continue
         if line == "q":
             break
+        if line == "help":
+            print_help()
+            continue
 
         parts = line.split()
         cmd = parts[0]
 
-        if cmd == "register":
-            if len(parts) < 3:
-                print("用法: register <account> <password>")
-                continue
-            data, session = encode_request("register", {
-                "account": parts[1], "password": parts[2]
-            })
-            send_packet(sock, data)
-            print(f"[→ {session}] register")
+        if cmd not in C2S_PROTO:
+            print(f"未知命令: {cmd}，输入 help 查看协议列表")
+            continue
 
-        elif cmd == "login":
-            if len(parts) < 3:
-                print("用法: login <account> <password>")
-                continue
-            data, session = encode_request("login", {
-                "account": parts[1], "password": parts[2]
-            })
+        if cmd in NO_ARGS_PROTO:
+            data, session = encode_request(cmd)
             send_packet(sock, data)
-            print(f"[→ {session}] login")
-
-        elif cmd == "chat":
-            if len(parts) < 2:
-                print("用法: chat <msg>")
-                continue
-            data, session = encode_request("chat", {"msg": parts[1]})
-            send_packet(sock, data)
-            print(f"[→ {session}] chat")
-
-        elif cmd == "ping":
-            data, session = encode_request("ping")
-            send_packet(sock, data)
-            print(f"[→ {session}] ping")
-
+            print(f"[→ {session}] {cmd}")
         else:
-            print(f"未知命令: {cmd}")
+            proto = C2S_PROTO[cmd]
+            req_fields = proto["request"]
+            args = {}
+            for i, (tag, ftype, fname, is_array, _) in enumerate(req_fields):
+                if i + 1 < len(parts):
+                    raw = parts[i + 1]
+                    if ftype == T_INTEGER:
+                        args[fname] = int(raw)
+                    elif ftype == T_BOOLEAN:
+                        args[fname] = raw.lower() in ("true", "1", "yes")
+                    else:
+                        args[fname] = raw
+                else:
+                    # 尝试读取更多输入作为该字段的值
+                    remaining = parts[i + 1:]
+                    if remaining:
+                        args[fname] = " ".join(remaining)
+                    break
+
+            data, session = encode_request(cmd, args)
+            send_packet(sock, data)
+            print(f"[→ {session}] {cmd} {args}")
 
     sock.close()
     print("[退出]")

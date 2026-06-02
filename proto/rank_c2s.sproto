@@ -1,0 +1,24 @@
+# 排行榜系统 — 客户端请求协议
+rank_top 50 {
+	request {
+		board_type 0 : string
+		top_n 1 : integer
+	}
+	response {
+		ok 0 : boolean
+		entries 1 : *rank_entry
+		update_time 2 : integer
+	}
+}
+
+rank_self 51 {
+	request {
+		board_type 0 : string
+	}
+	response {
+		ok 0 : boolean
+		rank 1 : integer
+		score 2 : integer
+		total 3 : integer
+	}
+}

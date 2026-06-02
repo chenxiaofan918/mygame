@@ -1,0 +1,5 @@
+# 通用公共类型（c2s + s2c 共用）
+.package {
+	type 0 : integer
+	session 1 : integer
+}

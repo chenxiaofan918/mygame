@@ -12,7 +12,7 @@
 
 set -e
 
-PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 SKYNET_BIN="$PROJECT_DIR/server/bin/skynet"
 SKYNET_VER_FILE="$PROJECT_DIR/server/bin/skynet.version"
 CONFIG="$PROJECT_DIR/server/config/config.game"

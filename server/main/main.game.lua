@@ -31,6 +31,11 @@ skynet.start(function()
 	-- 登录服务
 	skynet.uniqueservice("login/login")
 
+	-- 通用游戏模块
+	skynet.newservice("game/bag")
+	skynet.newservice("game/chat")
+	skynet.uniqueservice("game/rank")
+
 	-- 网关（连接管理）
 	local watchdog = skynet.newservice("common/watchdog")
 	skynet.call(watchdog, "lua", "start", {

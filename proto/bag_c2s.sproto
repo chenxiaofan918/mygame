@@ -1,0 +1,50 @@
+# 背包系统 — 客户端请求协议
+bag_list 30 {
+	request {}
+	response {
+		ok 0 : boolean
+		items 1 : *item_entry
+		gold 2 : integer
+		capacity 3 : integer
+	}
+}
+
+bag_add 31 {
+	request {
+		template_id 0 : integer
+		count 1 : integer
+	}
+	response {
+		ok 0 : boolean
+		items 1 : *item_entry
+	}
+}
+
+bag_remove 32 {
+	request {
+		uid 0 : string
+		count 1 : integer
+	}
+	response {
+		ok 0 : boolean
+	}
+}
+
+bag_use 33 {
+	request {
+		uid 0 : string
+		count 1 : integer
+	}
+	response {
+		ok 0 : boolean
+		effects 1 : *effect_entry
+	}
+}
+
+bag_sort 34 {
+	request {}
+	response {
+		ok 0 : boolean
+		items 1 : *item_entry
+	}
+}

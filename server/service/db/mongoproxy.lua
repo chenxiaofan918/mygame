@@ -103,12 +103,16 @@ end
 
 -- 查询多个文档（返回数组）
 -- mongo.find("players", { level = { ["$gte"] = 10 } }, { nickname = 1, level = 1 }, 100)
-function CMD.find(collection, query, projection, limit)
+-- mongo.find("players", {}, { player_id = 1, nickname = 1 }, 50, { level = -1 })  -- 带排序
+function CMD.find(collection, query, projection, limit, sort)
 	if not connected then return { badresult = true, err = "mongo not connected" } end
 	local col = db[collection]
 	local cursor = col:find(query, projection)
 	if limit then
 		cursor:limit(limit)
+	end
+	if sort then
+		cursor:sort(sort)
 	end
 	local results = {}
 	local ok, err = pcall(function()

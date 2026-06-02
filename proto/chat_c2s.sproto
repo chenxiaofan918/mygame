@@ -1,0 +1,22 @@
+# 聊天系统 — 客户端请求协议
+chat_send 40 {
+	request {
+		channel 0 : integer
+		target_id 1 : integer
+		msg 2 : string
+	}
+	response {
+		ok 0 : boolean
+	}
+}
+
+chat_history 41 {
+	request {
+		channel 0 : integer
+		count 1 : integer
+	}
+	response {
+		ok 0 : boolean
+		messages 1 : *chat_message_entry
+	}
+}

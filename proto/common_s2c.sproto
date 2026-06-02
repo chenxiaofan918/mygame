@@ -1,0 +1,7 @@
+# 通用服务端推送协议
+error 1 {
+	response {
+		code 0 : integer
+		msg 1 : string
+	}
+}

@@ -1,0 +1,18 @@
+# 通用客户端请求协议
+ping 4 {}
+
+enter_scene 10 {
+	request {
+		scene_id 0 : integer
+	}
+	response {
+		ok 0 : boolean
+	}
+}
+
+move 11 {
+	request {
+		x 0 : integer
+		y 1 : integer
+	}
+}

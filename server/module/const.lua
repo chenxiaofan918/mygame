@@ -23,23 +23,24 @@ M.ERROR = {
 	PLAYER_NOT_FOUND = 2001,
 
 	-- 场景
-	SCENE_FULL = 3001,
+	SCENE_FULL = 3006,
+
+	-- 背包/物品
+	ITEM_NOT_FOUND = 3001,
+	ITEM_NOT_ENOUGH = 3002,
+	BACKPACK_FULL = 3003,
+	INVALID_ITEM_TYPE = 3004,
+	CANNOT_USE_ITEM = 3005,
+
+	-- 聊天
+	CHAT_TOO_FAST = 4001,
+	PLAYER_OFFLINE = 4002,
+	MSG_TOO_LONG = 4003,
+
+	-- 排行榜
+	INVALID_BOARD_TYPE = 5001,
 }
 
--- 消息ID
-M.MSG = {
-	C_LOGIN = 1,
-	C_REGISTER = 2,
-	C_ENTER_SCENE = 10,
-	C_MOVE = 11,
-	C_CHAT = 20,
-
-	S_LOGIN_OK = 1,
-	S_ERROR = 2,
-	S_SCENE_ENTER = 10,
-	S_SCENE_LEAVE = 11,
-	S_CHAT = 20,
-}
 
 -- 玩家状态
 M.PLAYER_STATUS = {
@@ -53,6 +54,20 @@ M.SCENE_TYPE = {
 	SAFE = 1,     -- 安全区
 	FIELD = 2,    -- 野外
 	DUNGEON = 3,  -- 副本
+}
+
+-- 聊天频道
+M.CHAT_CHANNEL = {
+	WORLD  = 1,
+	SYSTEM = 2,
+	PRIVATE = 3,
+}
+
+-- 排行榜类型
+M.LEADERBOARD_TYPE = {
+	LEVEL   = "level",
+	GOLD    = "gold",
+	DIAMOND = "diamond",
 }
 
 return M

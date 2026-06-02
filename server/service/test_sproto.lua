@@ -108,8 +108,8 @@ skynet.start(function()
 
 	-- ====== 4. 聊天 ======
 	do
-		local typ, name, args = send_recv(fd, "chat", { msg = "hello sproto!" })
-		check("chat ok", args and args.msg == "hello sproto!", args)
+		local typ, name, args = send_recv(fd, "chat_send", { channel = 1, target_id = 0, msg = "hello sproto!" })
+		check("chat_send ok", args and args.ok == true, args)
 	end
 
 	-- ====== 5. Ping ======
