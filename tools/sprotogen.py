@@ -111,8 +111,8 @@ def to_camel(snake: str) -> str:
 #  .sproto 解析器
 # ============================================================
 
-# 字段正则: name tag : [*]type
-FIELD_RE = re.compile(r'^(\w+)\s+(\d+)\s*:\s*(\*?)(\w+)\s*$')
+# 字段正则: name tag : [*]type [# 注释]
+FIELD_RE = re.compile(r'^(\w+)\s+(\d+)\s*:\s*(\*?)(\w+)\s*?(?:#.*)?$')
 
 
 def parse_fields_from_block(lines, start, end):

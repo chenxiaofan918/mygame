@@ -1,14 +1,20 @@
 # 背包系统公共类型（c2s + s2c 共用）
+#
+# 背包中的一个物品。
+# 可堆叠物品（如药水）按 item_id + count 合并到同一格子，
+# 不可堆叠物品（如装备）每个独占一个格子。
 .item_entry {
-	uid 0 : string
-	item_id 1 : integer
-	count 2 : integer
-	position 3 : integer
-	equipped 4 : boolean
-	extra 5 : string
+	uid 0 : string      # 物品唯一实例 ID，格式 "item_<自增数字>"
+	item_id 1 : integer # 物品模板 ID，对应 item_template 表
+	count 2 : integer   # 堆叠数量（不可堆叠物品始终为 1）
+	position 3 : integer# 背包格子位置索引，从 1 开始
+	equipped 4 : boolean# 是否已装备
+	extra 5 : string    # 额外属性，JSON 格式字符串，预留（洗练/强化/附魔等）
 }
 
+# 物品使用效果。
+# 使用消耗品时返回的效果列表，客户端据此播放动画或更新属性。
 .effect_entry {
-	type 0 : string
-	value 1 : integer
+	type 0 : string     # 效果类型: "exp"(经验), "hp"(生命), "attr"(属性点)
+	value 1 : integer   # 效果数值（正数=增益，负数=减益）
 }

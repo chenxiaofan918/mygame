@@ -1,17 +1,25 @@
 # 聊天系统 — 服务端推送协议
+#
+# 系统通知推送（预留）。
+# 用于向玩家发送系统消息/通知，如活动提醒、奖励到账等。
+# 当前版本暂未使用，预留接口。
 chat_notify 10 {
 	response {
-		player_id 0 : integer
-		msg 1 : string
+		player_id 0 : integer  # 接收通知的玩家 ID
+		msg 1 : string         # 通知内容
 	}
 }
 
+# 聊天消息推送（世界频道广播或私聊）。
+# 服务端在以下情况主动推送:
+#   - 世界频道: 有玩家发送世界消息时，广播给所有在线玩家
+#   - 私聊: 目标玩家在线时，转发私聊消息
 chat_message 11 {
 	response {
-		channel 0 : integer
-		from_id 1 : integer
-		from_name 2 : string
-		msg 3 : string
-		timestamp 4 : integer
+		channel 0 : integer   # 频道: 1=世界, 3=私聊
+		from_id 1 : integer   # 发送者 player_id
+		from_name 2 : string  # 发送者昵称
+		msg 3 : string        # 消息正文
+		timestamp 4 : integer # 服务端时间戳
 	}
 }

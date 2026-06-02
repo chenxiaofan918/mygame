@@ -1,5 +1,9 @@
 # 通用公共类型（c2s + s2c 共用）
+#
+# 所有 sproto 消息的信封包装。
+# 服务端收到客户端消息时，先用 .package 解包，
+# 通过 type 字段分发到对应协议处理器。
 .package {
-	type 0 : integer
-	session 1 : integer
+	type 0 : integer    # 消息类型: 0=服务端推送(s2c), 1=错误响应, 其他=请求协议 tag
+	session 1 : integer # 会话ID，请求-响应配对用。服务端推送时 session=0
 }

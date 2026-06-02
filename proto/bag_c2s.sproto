@@ -1,50 +1,60 @@
 # 背包系统 — 客户端请求协议
+#
+# 查询背包列表。
+# 不需要参数，服务端返回当前玩家的全部背包物品和金币信息。
 bag_list 30 {
 	request {}
 	response {
 		ok 0 : boolean
-		items 1 : *item_entry
-		gold 2 : integer
-		capacity 3 : integer
+		items 1 : *item_entry   # 背包中的所有物品
+		gold 2 : integer        # 当前金币数量
+		capacity 3 : integer    # 背包总容量上限，默认 100
 	}
 }
 
+# 添加物品到背包（一般由游戏逻辑触发，非玩家主动调用）。
+# 可用于兑换码领奖等场景。
 bag_add 31 {
 	request {
-		item_id 0 : integer
-		count 1 : integer
+		item_id 0 : integer  # 物品模板 ID
+		count 1 : integer    # 数量，默认 1
 	}
 	response {
 		ok 0 : boolean
-		items 1 : *item_entry
+		items 1 : *item_entry  # 新增或叠加后的物品列表
 	}
 }
 
+# 从背包移除物品。
 bag_remove 32 {
 	request {
-		uid 0 : string
-		count 1 : integer
+		uid 0 : string   # 要移除的物品 UID
+		count 1 : integer# 移除数量，默认 1; 不足整组时整组移除
 	}
 	response {
 		ok 0 : boolean
 	}
 }
 
+# 使用背包中的物品。
+# 使用后服务端返回 effects 列表，客户端需据此更新对应属性。
 bag_use 33 {
 	request {
-		uid 0 : string
-		count 1 : integer
+		uid 0 : string   # 要使用的物品 UID
+		count 1 : integer# 使用数量，默认 1
 	}
 	response {
 		ok 0 : boolean
-		effects 1 : *effect_entry
+		effects 1 : *effect_entry  # 使用效果（经验/生命/属性等）
 	}
 }
 
+# 整理背包。
+# 服务端按 类型 → 品质降序 排序，并重新分配 position。
 bag_sort 34 {
 	request {}
 	response {
 		ok 0 : boolean
-		items 1 : *item_entry
+		items 1 : *item_entry  # 排序后的物品列表
 	}
 }

@@ -1,7 +1,11 @@
 # 通用服务端推送协议
+#
+# 通用错误推送。
+# 在无法通过常规响应返回错误时使用（如连接超时、服务不可用等）。
+# code 枚举值见 server/module/const.lua 的 ERROR 表。
 error 1 {
 	response {
-		code 0 : integer
-		msg 1 : string
+		code 0 : integer  # 错误码
+		msg 1 : string    # 错误描述（中文字符串，仅供日志/显示）
 	}
 }

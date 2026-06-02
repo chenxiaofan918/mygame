@@ -1,22 +1,27 @@
 # 聊天系统 — 客户端请求协议
+#
+# 发送聊天消息。
+# 服务端有 1 秒的发送冷却，超限的消息会被丢弃。
 chat_send 40 {
 	request {
-		channel 0 : integer
-		target_id 1 : integer
-		msg 2 : string
+		channel 0 : integer   # 频道: 1=世界(默认), 3=私聊
+		target_id 1 : integer # 私聊目标 player_id; 世界频道传 0
+		msg 2 : string        # 消息正文，最长 200 字节，至少 1 字节
 	}
 	response {
 		ok 0 : boolean
 	}
 }
 
+# 查询聊天历史记录。
+# 目前仅世界频道(channel=1)有历史缓存，最多保留最近 50 条。
 chat_history 41 {
 	request {
-		channel 0 : integer
-		count 1 : integer
+		channel 0 : integer  # 频道: 1=世界
+		count 1 : integer    # 拉取条数，默认 20
 	}
 	response {
 		ok 0 : boolean
-		messages 1 : *chat_message_entry
+		messages 1 : *chat_message_entry  # 历史消息列表，按时间降序
 	}
 }

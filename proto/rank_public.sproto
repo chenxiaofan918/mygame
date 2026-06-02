@@ -1,7 +1,9 @@
 # 排行榜系统公共类型（c2s + s2c 共用）
+#
+# 排行榜条目。
 .rank_entry {
-	rank 0 : integer
-	player_id 1 : integer
-	nickname 2 : string
-	score 3 : integer
+	rank 0 : integer      # 排名，从 1 开始
+	player_id 1 : integer # 玩家 ID
+	nickname 2 : string   # 玩家昵称
+	score 3 : integer     # 排行依据的分数
 }

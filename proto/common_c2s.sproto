@@ -1,18 +1,24 @@
 # 通用客户端请求协议
+#
+# 心跳，保持连接活性。无请求体无响应体，客户端定期发送即可。
 ping 4 {}
 
+# 进入场景
+# 客户端选服/创角完成后，调用此协议进入游戏场景。
 enter_scene 10 {
 	request {
-		scene_id 0 : integer
+		scene_id 0 : integer  # 场景 ID
 	}
 	response {
 		ok 0 : boolean
 	}
 }
 
+# 角色移动
+# 客户端请求移动到指定坐标。目前仅记录位置，无碰撞校验。
 move 11 {
 	request {
-		x 0 : integer
-		y 1 : integer
+		x 0 : integer  # 目标坐标 X
+		y 1 : integer  # 目标坐标 Y
 	}
 }

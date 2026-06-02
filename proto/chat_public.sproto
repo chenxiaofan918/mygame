@@ -1,7 +1,9 @@
 # 聊天系统公共类型（c2s + s2c 共用）
+#
+# 聊天消息条目，用于历史记录和实时推送。
 .chat_message_entry {
-	from_id 0 : integer
-	from_name 1 : string
-	msg 2 : string
-	timestamp 3 : integer
+	from_id 0 : integer   # 发送者 player_id
+	from_name 1 : string  # 发送者昵称
+	msg 2 : string        # 消息正文，最长 200 字节
+	timestamp 3 : integer # 服务端时间戳（Unix 秒）
 }

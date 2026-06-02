@@ -1,24 +1,29 @@
 # 排行榜系统 — 客户端请求协议
+#
+# 查询指定排行榜的前 N 名。
+# 排行数据由服务端每 300 秒从数据库重新计算，结果缓存 60 秒。
+# 支持的榜单类型见 server/module/const.lua。
 rank_top 50 {
 	request {
-		board_type 0 : string
-		top_n 1 : integer
+		board_type 0 : string  # 榜单类型: "level"(等级), "gold"(金币), "diamond"(钻石)
+		top_n 1 : integer      # 拉取名次数量，默认 10，上限 50
 	}
 	response {
 		ok 0 : boolean
-		entries 1 : *rank_entry
-		update_time 2 : integer
+		entries 1 : *rank_entry         # Top N 排行条目
+		update_time 2 : integer         # 榜单最近刷新时间（Unix 秒）
 	}
 }
 
+# 查询自己在排行榜中的排名和分数。
 rank_self 51 {
 	request {
-		board_type 0 : string
+		board_type 0 : string  # 榜单类型，同上
 	}
 	response {
 		ok 0 : boolean
-		rank 1 : integer
-		score 2 : integer
-		total 3 : integer
+		rank 1 : integer  # 玩家排名，0 = 未上榜
+		score 2 : integer # 玩家分数
+		total 3 : integer # 榜单总人数
 	}
 }
