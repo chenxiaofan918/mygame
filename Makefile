@@ -3,7 +3,10 @@ SKYNET = 3rd/skynet
 
 # Lua 路径（与 server/config/config.path 保持一致）
 LUA_PATH ?= ./server/main/?.lua;./server/module/?.lua;./server/lib/lualib/?.lua;;
-LUA_CPATH ?= ./server/lib/luaclib/?.so;;
+# 注意: ;; 在末尾 = 系统默认路径在后, ;; 在前 = 系统默认路径优先
+# proto 编译需要系统 lpeg（系统已安装），故 ;; 放前面
+# sproto.so 只存在于项目路径，仍会 fallback 找到
+LUA_CPATH ?= ;;./server/lib/luaclib/?.so
 
 # Lua 解释器: 可覆盖，如 make proto LUA=lua5.3
 # 如果系统 lua 与 lpeg.so 版本不匹配，可尝试:
