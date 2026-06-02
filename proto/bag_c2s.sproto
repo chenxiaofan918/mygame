@@ -11,7 +11,7 @@ bag_list 30 {
 
 bag_add 31 {
 	request {
-		template_id 0 : integer
+		item_id 0 : integer
 		count 1 : integer
 	}
 	response {

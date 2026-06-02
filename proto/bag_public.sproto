@@ -1,7 +1,7 @@
 # 背包系统公共类型（c2s + s2c 共用）
 .item_entry {
 	uid 0 : string
-	template_id 1 : integer
+	item_id 1 : integer
 	count 2 : integer
 	position 3 : integer
 	equipped 4 : boolean
