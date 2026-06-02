@@ -5,6 +5,13 @@ SKYNET = 3rd/skynet
 LUA_PATH ?= ./server/main/?.lua;./server/module/?.lua;./server/lib/lualib/?.lua;;
 LUA_CPATH ?= ./server/lib/luaclib/?.so;;
 
+# Lua 解释器: 可覆盖，如 make proto LUA=lua5.3
+# 如果系统 lua 与 lpeg.so 版本不匹配，可尝试:
+#   apt install lua-lpeg       # Debian/Ubuntu
+#   yum install lua-lpeg       # CentOS/RHEL
+#   luarocks install lpeg      # 通用
+LUA ?= lua
+
 .PHONY: all proto proto-cs proto-ts proto-check proto-snapshot build compat-check clean run-game run-login
 
 all: build
@@ -23,7 +30,7 @@ all: build
 #   proto-lua 仅生成 Lua (服务端)
 proto:
 	LUA_PATH="$(LUA_PATH)" LUA_CPATH="$(LUA_CPATH)" \
-		lua tools/compile_sproto.lua
+		$(LUA) tools/compile_sproto.lua
 	python tools/sprotogen.py --all
 
 proto-cs:
@@ -38,7 +45,7 @@ proto-lua:
 # CI 用：检查 .spb 是否与 .sproto 同步
 proto-check:
 	LUA_PATH="$(LUA_PATH)" LUA_CPATH="$(LUA_CPATH)" \
-		lua tools/compile_sproto.lua /tmp/proto_check
+		$(LUA) tools/compile_sproto.lua /tmp/proto_check
 	@for f in proto/c2s.spb proto/s2c.spb; do \
 		if [ -f /tmp/proto_check/$$(basename $$f) ] && [ -f $$f ]; then \
 			cmp -s /tmp/proto_check/$$(basename $$f) $$f && \

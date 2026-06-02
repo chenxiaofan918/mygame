@@ -24,7 +24,25 @@ package.path = ROOT .. "server/main/?.lua;"
 package.cpath = ROOT .. "server/lib/luaclib/?.so;"
 	.. package.cpath
 
-local sprotoparser = require "sprotoparser"
+local ok, sprotoparser = pcall(require, "sprotoparser")
+if not ok then
+	io.stderr:write([[
+[compile_sproto] ERROR: 无法加载 sprotoparser（依赖 lpeg）
+  lpeg.so 与当前 Lua 解释器版本不匹配。
+
+解决方案:
+  1) 指定正确版本的 Lua:  make proto LUA=lua5.4
+  2) 安装系统 lpeg 包:
+       apt install lua-lpeg       # Debian/Ubuntu
+       yum install lua-lpeg       # CentOS/RHEL
+  3) 或用 luarocks 安装: luarocks install lpeg
+
+  当前 Lua 版本: ]] .. _VERSION .. [[
+  搜索路径: ]] .. package.cpath .. [[
+
+]])
+	os.exit(1)
+end
 
 local proto_dir = arg[1] or "./proto/"
 local out_dir   = arg[2] or "./proto/"
