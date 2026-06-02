@@ -2,6 +2,7 @@
 *.o
 *.so
 *.dll
+*.spb
 
 # server/lib/ 下的 .so 是 skynet 运行时必需，不忽略
 !server/lib/cservice/*.so

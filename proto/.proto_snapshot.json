@@ -1,0 +1,633 @@
+{
+  "types": {
+    "chat_message_entry": {
+      "fields": [
+        {
+          "name": "from_id",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "from_name",
+          "tag": 1,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "msg",
+          "tag": 2,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "timestamp",
+          "tag": 3,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    },
+    "effect_entry": {
+      "fields": [
+        {
+          "name": "type",
+          "tag": 0,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "value",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    },
+    "item_entry": {
+      "fields": [
+        {
+          "name": "uid",
+          "tag": 0,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "item_id",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "count",
+          "tag": 2,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "position",
+          "tag": 3,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "equipped",
+          "tag": 4,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "extra",
+          "tag": 5,
+          "type": "string",
+          "array": false
+        }
+      ]
+    },
+    "package": {
+      "fields": [
+        {
+          "name": "type",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "session",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    },
+    "rank_entry": {
+      "fields": [
+        {
+          "name": "rank",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "player_id",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "nickname",
+          "tag": 2,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "score",
+          "tag": 3,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    }
+  },
+  "protocols": {
+    "bag_list": {
+      "tag": 30,
+      "direction": "c2s",
+      "module": "bag",
+      "request": [],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "items",
+          "tag": 1,
+          "type": "item_entry",
+          "array": true
+        },
+        {
+          "name": "gold",
+          "tag": 2,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "capacity",
+          "tag": 3,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    },
+    "bag_add": {
+      "tag": 31,
+      "direction": "c2s",
+      "module": "bag",
+      "request": [
+        {
+          "name": "item_id",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "count",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "items",
+          "tag": 1,
+          "type": "item_entry",
+          "array": true
+        }
+      ]
+    },
+    "bag_remove": {
+      "tag": 32,
+      "direction": "c2s",
+      "module": "bag",
+      "request": [
+        {
+          "name": "uid",
+          "tag": 0,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "count",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        }
+      ]
+    },
+    "bag_use": {
+      "tag": 33,
+      "direction": "c2s",
+      "module": "bag",
+      "request": [
+        {
+          "name": "uid",
+          "tag": 0,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "count",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "effects",
+          "tag": 1,
+          "type": "effect_entry",
+          "array": true
+        }
+      ]
+    },
+    "bag_sort": {
+      "tag": 34,
+      "direction": "c2s",
+      "module": "bag",
+      "request": [],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "items",
+          "tag": 1,
+          "type": "item_entry",
+          "array": true
+        }
+      ]
+    },
+    "chat_send": {
+      "tag": 40,
+      "direction": "c2s",
+      "module": "chat",
+      "request": [
+        {
+          "name": "channel",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "target_id",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "msg",
+          "tag": 2,
+          "type": "string",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        }
+      ]
+    },
+    "chat_history": {
+      "tag": 41,
+      "direction": "c2s",
+      "module": "chat",
+      "request": [
+        {
+          "name": "channel",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "count",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "messages",
+          "tag": 1,
+          "type": "chat_message_entry",
+          "array": true
+        }
+      ]
+    },
+    "ping": {
+      "tag": 4,
+      "direction": "c2s",
+      "module": "common",
+      "request": [],
+      "response": []
+    },
+    "enter_scene": {
+      "tag": 10,
+      "direction": "c2s",
+      "module": "common",
+      "request": [
+        {
+          "name": "scene_id",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        }
+      ]
+    },
+    "move": {
+      "tag": 11,
+      "direction": "c2s",
+      "module": "common",
+      "request": [
+        {
+          "name": "x",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "y",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        }
+      ],
+      "response": []
+    },
+    "login": {
+      "tag": 1,
+      "direction": "c2s",
+      "module": "login",
+      "request": [
+        {
+          "name": "account",
+          "tag": 0,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "password",
+          "tag": 1,
+          "type": "string",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "player_id",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "token",
+          "tag": 2,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "nickname",
+          "tag": 3,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "level",
+          "tag": 4,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    },
+    "register": {
+      "tag": 2,
+      "direction": "c2s",
+      "module": "login",
+      "request": [
+        {
+          "name": "account",
+          "tag": 0,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "password",
+          "tag": 1,
+          "type": "string",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "player_id",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    },
+    "rank_top": {
+      "tag": 50,
+      "direction": "c2s",
+      "module": "rank",
+      "request": [
+        {
+          "name": "board_type",
+          "tag": 0,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "top_n",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "entries",
+          "tag": 1,
+          "type": "rank_entry",
+          "array": true
+        },
+        {
+          "name": "update_time",
+          "tag": 2,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    },
+    "rank_self": {
+      "tag": 51,
+      "direction": "c2s",
+      "module": "rank",
+      "request": [
+        {
+          "name": "board_type",
+          "tag": 0,
+          "type": "string",
+          "array": false
+        }
+      ],
+      "response": [
+        {
+          "name": "ok",
+          "tag": 0,
+          "type": "boolean",
+          "array": false
+        },
+        {
+          "name": "rank",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "score",
+          "tag": 2,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "total",
+          "tag": 3,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    },
+    "chat_notify": {
+      "tag": 10,
+      "direction": "s2c",
+      "module": "chat",
+      "request": [],
+      "response": [
+        {
+          "name": "player_id",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "msg",
+          "tag": 1,
+          "type": "string",
+          "array": false
+        }
+      ]
+    },
+    "chat_message": {
+      "tag": 11,
+      "direction": "s2c",
+      "module": "chat",
+      "request": [],
+      "response": [
+        {
+          "name": "channel",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "from_id",
+          "tag": 1,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "from_name",
+          "tag": 2,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "msg",
+          "tag": 3,
+          "type": "string",
+          "array": false
+        },
+        {
+          "name": "timestamp",
+          "tag": 4,
+          "type": "integer",
+          "array": false
+        }
+      ]
+    },
+    "error": {
+      "tag": 1,
+      "direction": "s2c",
+      "module": "common",
+      "request": [],
+      "response": [
+        {
+          "name": "code",
+          "tag": 0,
+          "type": "integer",
+          "array": false
+        },
+        {
+          "name": "msg",
+          "tag": 1,
+          "type": "string",
+          "array": false
+        }
+      ]
+    }
+  }
+}

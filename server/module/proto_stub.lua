@@ -2,6 +2,8 @@
 
 local M = {}
 
+M._PROTO_HASH = "0d96884cbc9728dbf49eaec3eadd54d8fe0b2dc4ed5ddc489538b86639bfc4fe"
+
 -- ======== c2s Protocol Tags ========
 -- bag
 M.BAG_LIST = 30

@@ -1,6 +1,11 @@
 -- proto: sproto 协议定义入口
 -- 按功能+方向拆分在 proto/*_{c2s,s2c,public}.sproto
 -- 加载规则: c2s = *_public + *_c2s,  s2c = *_public + *_s2c
+--
+-- 注意: 此模块已不再被运行时引用。
+-- 生产环境通过 `make proto` 预编译 .sproto → .spb，
+-- 由 protoloader 直接加载 .spb 二进制。
+-- 此文件保留作为协议组装的参考，构建工具 compile_sproto.lua 也与此对标。
 local sprotoparser = require "sprotoparser"
 
 local proto_dir = "./proto/"
