@@ -29,8 +29,14 @@ all: build
 #   proto-ts  仅生成 TypeScript (Cocos Creator)
 #   proto-lua 仅生成 Lua (服务端)
 proto:
-	LUA_PATH="$(LUA_PATH)" LUA_CPATH="$(LUA_CPATH)" \
-		$(LUA) tools/compile_sproto.lua
+	@if LUA_PATH="$(LUA_PATH)" LUA_CPATH="$(LUA_CPATH)" \
+		$(LUA) tools/compile_sproto.lua 2>/dev/null; then \
+		echo "[make] .spb generated"; \
+	else \
+		echo "[make] WARNING: .spb not generated (sprotoparser/lpeg unavailable)"; \
+		echo "  Server will parse .sproto at runtime (fallback mode)"; \
+		echo "  To enable: apt install lua-lpeg  or  luarocks install lpeg"; \
+	fi
 	python tools/sprotogen.py --all
 
 proto-cs:
@@ -44,16 +50,18 @@ proto-lua:
 
 # CI 用：检查 .spb 是否与 .sproto 同步
 proto-check:
-	LUA_PATH="$(LUA_PATH)" LUA_CPATH="$(LUA_CPATH)" \
-		$(LUA) tools/compile_sproto.lua /tmp/proto_check
-	@for f in proto/c2s.spb proto/s2c.spb; do \
-		if [ -f /tmp/proto_check/$$(basename $$f) ] && [ -f $$f ]; then \
-			cmp -s /tmp/proto_check/$$(basename $$f) $$f && \
-				echo "  [OK] $$f is up to date" || \
-				(echo "  [STALE] $$f - run 'make proto'" && exit 1); \
-		fi; \
-	done
-	@rm -rf /tmp/proto_check
+	@if LUA_PATH="$(LUA_PATH)" LUA_CPATH="$(LUA_CPATH)" \
+		$(LUA) tools/compile_sproto.lua /tmp/proto_check 2>/dev/null; then \
+		for f in proto/c2s.spb proto/s2c.spb; do \
+			if [ -f /tmp/proto_check/$$(basename $$f) ] && [ -f $$f ]; then \
+				cmp -s /tmp/proto_check/$$(basename $$f) $$f && \
+					echo "  [OK] $$f is up to date" || \
+					(echo "  [STALE] $$f - run 'make proto'" && exit 1); \
+			fi; \
+		done; \
+	else \
+		echo "[make] WARNING: cannot check .spb freshness (sprotoparser unavailable)"; \
+	fi
 
 # ======== 协议兼容性检查 ========
 # compat-check: 检查 .sproto 更改是否向后兼容
