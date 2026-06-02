@@ -21,8 +21,8 @@ package.path = ROOT .. "server/main/?.lua;"
 	.. ROOT .. "server/module/?.lua;"
 	.. ROOT .. "server/lib/lualib/?.lua;"
 	.. package.path
-package.cpath = ROOT .. "server/lib/luaclib/?.so;"
-	.. package.cpath
+package.cpath = package.cpath
+	.. ";" .. ROOT .. "server/lib/luaclib/?.so"
 
 local ok, sprotoparser = pcall(require, "sprotoparser")
 if not ok then
