@@ -669,6 +669,88 @@ def _gen_ts_interfaces(lines, p: Protocol):
 
 
 # ============================================================
+#  代码生成器 — Markdown 文档
+# ============================================================
+
+def gen_doc(all_types, all_protos, modules, output_path, proto_hash=""):
+    """生成 docs/protocol.md"""
+    lines = []
+    lines.append("# 通讯协议文档")
+    lines.append("")
+    lines.append(f"> 自动生成 by `tools/sprotogen.py`  |  SHA-256: `{proto_hash[:16]}...`")
+    lines.append("")
+    lines.append("## 目录")
+    lines.append("")
+
+    for mod in modules:
+        lines.append(f"- [{mod}](#{mod})")
+    lines.append("")
+
+    if all_types:
+        lines.append("---")
+        lines.append("## 共享类型")
+        lines.append("")
+        for t in all_types.values():
+            if not t.fields:
+                continue
+            lines.append(f"### `{t.name}`")
+            lines.append("")
+            lines.append("| 字段 | Tag | 类型 | 数组 |")
+            lines.append("|------|-----|------|------|")
+            for f in t.fields:
+                arr = "是" if f.is_array else ""
+                lines.append(f"| {f.name} | {f.tag} | `{f.type_name}` | {arr} |")
+            lines.append("")
+
+    for mod in modules:
+        mod_c2s = [p for p in all_protos if p.module == mod and p.direction == "c2s"]
+        mod_s2c = [p for p in all_protos if p.module == mod and p.direction == "s2c"]
+        if not mod_c2s and not mod_s2c:
+            continue
+        lines.append("---")
+        lines.append(f"## {mod}")
+        lines.append("")
+        if mod_c2s:
+            lines.append("### C2S（客户端请求）")
+            lines.append("")
+            for p in mod_c2s:
+                _gen_doc_proto(lines, p)
+        if mod_s2c:
+            lines.append("### S2C（服务端推送）")
+            lines.append("")
+            for p in mod_s2c:
+                _gen_doc_proto(lines, p)
+
+    lines.append("")
+    write_output(output_path, "\n".join(lines))
+    print(f"[sprotogen] generated {output_path}")
+
+
+def _gen_doc_proto(lines, p: Protocol):
+    """生成单个协议的文档段落"""
+    lines.append(f"#### `{p.name}` (tag={p.tag})")
+    lines.append("")
+    if p.has_request:
+        lines.append("**请求:**")
+        lines.append("")
+        lines.append("| 字段 | Tag | 类型 | 数组 |")
+        lines.append("|------|-----|------|------|")
+        for f in p.request_fields:
+            arr = "是" if f.is_array else ""
+            lines.append(f"| {f.name} | {f.tag} | `{f.type_name}` | {arr} |")
+        lines.append("")
+    if p.has_response:
+        lines.append("**响应:**")
+        lines.append("")
+        lines.append("| 字段 | Tag | 类型 | 数组 |")
+        lines.append("|------|-----|------|------|")
+        for f in p.response_fields:
+            arr = "是" if f.is_array else ""
+            lines.append(f"| {f.name} | {f.tag} | `{f.type_name}` | {arr} |")
+        lines.append("")
+
+
+# ============================================================
 #  输出工具
 # ============================================================
 
@@ -691,6 +773,7 @@ def main():
         "lua": os.path.join(os.path.dirname(__file__), "..", "server", "module", "proto_stub.lua"),
         "cs":  os.path.join(os.path.dirname(__file__), "..", "client", "unity", "Assets", "Scripts", "Proto", "Protocol.cs"),
         "ts":  os.path.join(os.path.dirname(__file__), "..", "client", "cocos", "assets", "scripts", "proto", "protocol.ts"),
+        "doc": os.path.join(os.path.dirname(__file__), "..", "docs", "protocol.md"),
     }
 
     # 解析命令行参数
@@ -706,7 +789,7 @@ def main():
             i += 1
             output_overrides["current"] = args[i]
         elif args[i] == "--all":
-            target_langs = {"lua", "cs", "ts"}
+            target_langs = {"lua", "cs", "ts", "doc"}
         elif args[i].startswith("--out:"):
             key = args[i][6:]
             i += 1
@@ -748,6 +831,8 @@ def main():
             gen_csharp(all_types, all_protos, modules, out_path, proto_hash)
         elif lang == "ts":
             gen_typescript(all_types, all_protos, modules, out_path, proto_hash)
+        elif lang == "doc":
+            gen_doc(all_types, all_protos, modules, out_path, proto_hash)
         else:
             print(f"[sprotogen] ERROR: unsupported language: {lang}")
             sys.exit(1)

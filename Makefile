@@ -15,7 +15,7 @@ LUA_CPATH ?= ;;./server/lib/luaclib/?.so
 #   luarocks install lpeg      # 通用
 LUA ?= lua
 
-.PHONY: all proto proto-cs proto-ts proto-check proto-snapshot build compat-check clean run-game run-login
+.PHONY: all proto proto-cs proto-ts proto-doc proto-check proto-snapshot build compat-check clean run-game run-login
 
 all: build
 
@@ -111,3 +111,6 @@ debug:
 # ======== 守护进程 ========
 daemon:
 	$(SKYNET)/skynet server/config/config.game daemon
+
+proto-doc:
+	python tools/sprotogen.py --lang doc
