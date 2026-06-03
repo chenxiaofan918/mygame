@@ -30,11 +30,12 @@ from collections import OrderedDict
 
 class Field:
     """sproto 字段定义"""
-    def __init__(self, name: str, tag: int, type_name: str, is_array: bool):
+    def __init__(self, name: str, tag: int, type_name: str, is_array: bool, comment: str = ""):
         self.name = name
         self.tag = tag
         self.type_name = type_name      # "integer" | "string" | "boolean" | 自定义类型名
         self.is_array = is_array        # 以 * 前缀标记
+        self.comment = comment          # 行内注释（# 后面的文本）
 
     def cs_type(self) -> str:
         """映射到 C# 类型"""
@@ -55,9 +56,10 @@ class Field:
 
 class TypeDef:
     """sproto 类型定义（如 .item_entry）"""
-    def __init__(self, name: str, fields: list):
+    def __init__(self, name: str, fields: list, comment: str = ""):
         self.name = name
         self.fields = fields
+        self.comment = comment          # 类型上方的注释块
 
     @property
     def pascal_name(self) -> str:
@@ -67,13 +69,14 @@ class TypeDef:
 class Protocol:
     """sproto 协议定义（如 bag_list 30）"""
     def __init__(self, name: str, tag: int, direction: str, module: str,
-                 request_fields: list, response_fields: list):
+                 request_fields: list, response_fields: list, comment: str = ""):
         self.name = name
         self.tag = tag
         self.direction = direction  # "c2s" | "s2c"
         self.module = module
         self.request_fields = request_fields
         self.response_fields = response_fields
+        self.comment = comment          # 协议上方的注释块
 
     @property
     def pascal_name(self) -> str:
@@ -112,7 +115,7 @@ def to_camel(snake: str) -> str:
 # ============================================================
 
 # 字段正则: name tag : [*]type [# 注释]
-FIELD_RE = re.compile(r'^(\w+)\s+(\d+)\s*:\s*(\*?)(\w+)\s*?(?:#.*)?$')
+FIELD_RE = re.compile(r'^(\w+)\s+(\d+)\s*:\s*(\*?)(\w+)\s*?(?:#\s*(.*))?$')
 
 
 def parse_fields_from_block(lines, start, end):
@@ -129,6 +132,7 @@ def parse_fields_from_block(lines, start, end):
                 tag=int(m.group(2)),
                 type_name=m.group(4),
                 is_array=bool(m.group(3)),
+                comment=(m.group(5) or "").strip(),
             ))
     return fields
 
@@ -152,18 +156,32 @@ def parse_sproto_full(filepath: str) -> tuple:
 
     # 按行分割，保留原始缩进
     lines = text.splitlines()
+    pending_comment = []  # 类型/协议上方的注释块缓冲区
     i = 0
     while i < len(lines):
         raw = lines[i]
         stripped = raw.strip()
 
-        # 跳过空行和注释
-        if not stripped or stripped.startswith("#"):
+        # 跳过空行，清空注释缓冲区
+        if not stripped:
+            pending_comment = []
+            i += 1
+            continue
+
+        # 捕获注释行（# text），空注释（#）作为分隔符清空缓冲区
+        if stripped == "#":
+            pending_comment = []
+            i += 1
+            continue
+        if stripped.startswith("#"):
+            pending_comment.append(stripped[1:].strip())
             i += 1
             continue
 
         # ---------- 类型定义: .type_name { ----------
         if stripped.startswith(".") and stripped.endswith("{"):
+            type_comment = "\n".join(pending_comment)
+            pending_comment = []
             type_name = stripped[1:-1].strip()
             i += 1
             depth = 1
@@ -178,17 +196,21 @@ def parse_sproto_full(filepath: str) -> tuple:
             types.append(TypeDef(
                 name=type_name,
                 fields=parse_fields_from_block(lines, field_start, i - 1),
+                comment=type_comment,
             ))
             continue
 
         # ---------- 协议定义 ----------
         # 空协议: ping 4 {}  (单行无字段)
         if re.match(r'^\w+\s+\d+\s*\{\}\s*$', stripped):
+            proto_comment = "\n".join(pending_comment)
+            pending_comment = []
             m = re.match(r'^(\w+)\s+(\d+)', stripped)
             protos.append(Protocol(
                 name=m.group(1), tag=int(m.group(2)),
                 direction="", module="",
                 request_fields=[], response_fields=[],
+                comment=proto_comment,
             ))
             i += 1
             continue
@@ -196,6 +218,8 @@ def parse_sproto_full(filepath: str) -> tuple:
         # 正常协议: name tag { (可能在同一行包含 request/response)
         m = re.match(r'^(\w+)\s+(\d+)\s*\{?\s*$', stripped)
         if m:
+            proto_comment = "\n".join(pending_comment)
+            pending_comment = []
             proto_name = m.group(1)
             proto_tag = int(m.group(2))
             i += 1
@@ -262,6 +286,7 @@ def parse_sproto_full(filepath: str) -> tuple:
                 module="",     # 调用者设置
                 request_fields=request_fields,
                 response_fields=response_fields,
+                comment=proto_comment,
             ))
             continue
 
@@ -695,11 +720,16 @@ def gen_doc(all_types, all_protos, modules, output_path, proto_hash=""):
                 continue
             lines.append(f"### `{t.name}`")
             lines.append("")
-            lines.append("| 字段 | Tag | 类型 | 数组 |")
-            lines.append("|------|-----|------|------|")
+            if t.comment:
+                for cl in t.comment.split("\n"):
+                    lines.append(f"> {cl}")
+                lines.append("")
+            lines.append("| 字段 | Tag | 类型 | 数组 | 说明 |")
+            lines.append("|------|-----|------|------|------|")
             for f in t.fields:
                 arr = "是" if f.is_array else ""
-                lines.append(f"| {f.name} | {f.tag} | `{f.type_name}` | {arr} |")
+                note = f.comment or ""
+                lines.append(f"| {f.name} | {f.tag} | `{f.type_name}` | {arr} | {note} |")
             lines.append("")
 
     for mod in modules:
@@ -730,23 +760,29 @@ def _gen_doc_proto(lines, p: Protocol):
     """生成单个协议的文档段落"""
     lines.append(f"#### `{p.name}` (tag={p.tag})")
     lines.append("")
+    if p.comment:
+        for cl in p.comment.split("\n"):
+            lines.append(f"> {cl}")
+        lines.append("")
     if p.has_request:
         lines.append("**请求:**")
         lines.append("")
-        lines.append("| 字段 | Tag | 类型 | 数组 |")
-        lines.append("|------|-----|------|------|")
+        lines.append("| 字段 | Tag | 类型 | 数组 | 说明 |")
+        lines.append("|------|-----|------|------|------|")
         for f in p.request_fields:
             arr = "是" if f.is_array else ""
-            lines.append(f"| {f.name} | {f.tag} | `{f.type_name}` | {arr} |")
+            note = f.comment or ""
+            lines.append(f"| {f.name} | {f.tag} | `{f.type_name}` | {arr} | {note} |")
         lines.append("")
     if p.has_response:
         lines.append("**响应:**")
         lines.append("")
-        lines.append("| 字段 | Tag | 类型 | 数组 |")
-        lines.append("|------|-----|------|------|")
+        lines.append("| 字段 | Tag | 类型 | 数组 | 说明 |")
+        lines.append("|------|-----|------|------|------|")
         for f in p.response_fields:
             arr = "是" if f.is_array else ""
-            lines.append(f"| {f.name} | {f.tag} | `{f.type_name}` | {arr} |")
+            note = f.comment or ""
+            lines.append(f"| {f.name} | {f.tag} | `{f.type_name}` | {arr} | {note} |")
         lines.append("")
 
 
